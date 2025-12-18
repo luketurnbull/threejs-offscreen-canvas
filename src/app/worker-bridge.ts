@@ -92,7 +92,11 @@ export default class WorkerBridge {
     viewport: ViewportSize,
     debug: boolean,
     callbacks: WorkerBridgeCallbacks,
-    sharedBuffers: { control: SharedArrayBuffer; transform: SharedArrayBuffer },
+    sharedBuffers: {
+      control: SharedArrayBuffer;
+      transform: SharedArrayBuffer;
+      timing: SharedArrayBuffer;
+    },
   ): Promise<void> {
     this.renderWorker = new Worker(
       new URL("../workers/render.worker.ts", import.meta.url),
@@ -119,6 +123,7 @@ export default class WorkerBridge {
   private async initPhysicsWorker(sharedBuffers: {
     control: SharedArrayBuffer;
     transform: SharedArrayBuffer;
+    timing: SharedArrayBuffer;
   }): Promise<void> {
     this.physicsWorker = new Worker(
       new URL("../workers/physics.worker.ts", import.meta.url),

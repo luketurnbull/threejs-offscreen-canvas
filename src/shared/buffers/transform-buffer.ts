@@ -1,14 +1,18 @@
 import type { EntityId } from "../types/entity";
 
 /**
- * Layout per entity in Float32Array:
- * [posX, posY, posZ, rotX, rotY, rotZ, rotW] = 7 floats
+ * Layout per entity in Float32Array (14 floats total):
+ * CURRENT:  [posX, posY, posZ, rotX, rotY, rotZ, rotW] = 7 floats
+ * PREVIOUS: [posX, posY, posZ, rotX, rotY, rotZ, rotW] = 7 floats
  *
- * Plus a control Int32Array for synchronization:
+ * Timing buffer (Float64Array):
+ * [currentFrameTime, previousFrameTime, physicsInterval] = 3 float64s
+ *
+ * Control Int32Array for synchronization:
  * [frameCounter, entityCount, ...entityIds]
  */
 
-const FLOATS_PER_ENTITY = 7; // position (3) + quaternion (4)
+const FLOATS_PER_ENTITY = 14; // current (7) + previous (7)
 const CONTROL_HEADER_SIZE = 2; // frameCounter, entityCount
 const MAX_ENTITIES = 64;
 
@@ -16,6 +20,34 @@ const MAX_ENTITIES = 64;
 const FRAME_COUNTER_INDEX = 0;
 const ENTITY_COUNT_INDEX = 1;
 const ENTITY_IDS_START = 2;
+
+// Timing buffer layout
+const TIMING_CURRENT_TIME_INDEX = 0;
+const TIMING_PREVIOUS_TIME_INDEX = 1;
+const TIMING_INTERVAL_INDEX = 2;
+const TIMING_BUFFER_SIZE = 3;
+
+/**
+ * Transform data for a single frame
+ */
+export interface TransformData {
+  posX: number;
+  posY: number;
+  posZ: number;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  rotW: number;
+}
+
+/**
+ * Frame timing information
+ */
+export interface FrameTiming {
+  currentTime: number;
+  previousTime: number;
+  interval: number;
+}
 
 /**
  * SharedTransformBuffer - Zero-copy transform synchronization between workers
@@ -25,45 +57,66 @@ const ENTITY_IDS_START = 2;
  *
  * Structure:
  * - controlBuffer (Int32Array): frame counter + entity IDs for synchronization
- * - transformBuffer (Float32Array): position + rotation data per entity
+ * - transformBuffer (Float32Array): previous + current position/rotation data per entity
+ * - timingBuffer (Float64Array): physics frame timestamps for interpolation
  *
+ * The double-buffered transforms (previous + current) combined with timestamps
+ * enable smooth interpolation without discontinuities when new physics frames arrive.
+ *
+ * @see https://gafferongames.com/post/fix_your_timestep/
  * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer
- * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics
  */
 export class SharedTransformBuffer {
   private controlSAB: SharedArrayBuffer;
   private transformSAB: SharedArrayBuffer;
+  private timingSAB: SharedArrayBuffer;
 
   private controlView: Int32Array;
   private transformView: Float32Array;
+  private timingView: Float64Array;
 
   private entityIndexMap: Map<EntityId, number> = new Map();
 
-  constructor(existingControl?: SharedArrayBuffer, existingTransform?: SharedArrayBuffer) {
-    if (existingControl && existingTransform) {
+  constructor(
+    existingControl?: SharedArrayBuffer,
+    existingTransform?: SharedArrayBuffer,
+    existingTiming?: SharedArrayBuffer,
+  ) {
+    if (existingControl && existingTransform && existingTiming) {
       // Use existing buffers (when receiving in worker)
       this.controlSAB = existingControl;
       this.transformSAB = existingTransform;
+      this.timingSAB = existingTiming;
     } else {
       // Create new buffers (in main thread)
-      const controlSize = (CONTROL_HEADER_SIZE + MAX_ENTITIES) * Int32Array.BYTES_PER_ELEMENT;
-      const transformSize = MAX_ENTITIES * FLOATS_PER_ENTITY * Float32Array.BYTES_PER_ELEMENT;
+      const controlSize =
+        (CONTROL_HEADER_SIZE + MAX_ENTITIES) * Int32Array.BYTES_PER_ELEMENT;
+      const transformSize =
+        MAX_ENTITIES * FLOATS_PER_ENTITY * Float32Array.BYTES_PER_ELEMENT;
+      const timingSize = TIMING_BUFFER_SIZE * Float64Array.BYTES_PER_ELEMENT;
 
       this.controlSAB = new SharedArrayBuffer(controlSize);
       this.transformSAB = new SharedArrayBuffer(transformSize);
+      this.timingSAB = new SharedArrayBuffer(timingSize);
     }
 
     this.controlView = new Int32Array(this.controlSAB);
     this.transformView = new Float32Array(this.transformSAB);
+    this.timingView = new Float64Array(this.timingSAB);
   }
 
   /**
    * Get the underlying SharedArrayBuffers for transfer to workers
    */
-  getBuffers(): { control: SharedArrayBuffer; transform: SharedArrayBuffer } {
+  getBuffers(): {
+    control: SharedArrayBuffer;
+    transform: SharedArrayBuffer;
+    timing: SharedArrayBuffer;
+  } {
     return {
       control: this.controlSAB,
       transform: this.transformSAB,
+      timing: this.timingSAB,
     };
   }
 
@@ -114,18 +167,24 @@ export class SharedTransformBuffer {
     const count = Atomics.load(this.controlView, ENTITY_COUNT_INDEX);
 
     for (let i = 0; i < count; i++) {
-      const entityId = Atomics.load(this.controlView, ENTITY_IDS_START + i) as EntityId;
+      const entityId = Atomics.load(
+        this.controlView,
+        ENTITY_IDS_START + i,
+      ) as EntityId;
       this.entityIndexMap.set(entityId, i);
     }
   }
 
   // ============================================
-  // Physics Worker: Write transforms
+  // Physics Worker: Write transforms and timing
   // ============================================
 
   /**
    * Write transform data for an entity
    * Called by Physics Worker each physics step
+   *
+   * This shifts the current transform to previous, then writes the new current.
+   * This enables smooth interpolation between physics frames.
    */
   writeTransform(
     entityIndex: number,
@@ -139,7 +198,16 @@ export class SharedTransformBuffer {
   ): void {
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
-    // Write transform data (non-atomic is fine for floats, we use frame counter for sync)
+    // Shift current → previous (indices 7-13)
+    this.transformView[offset + 7] = this.transformView[offset + 0];
+    this.transformView[offset + 8] = this.transformView[offset + 1];
+    this.transformView[offset + 9] = this.transformView[offset + 2];
+    this.transformView[offset + 10] = this.transformView[offset + 3];
+    this.transformView[offset + 11] = this.transformView[offset + 4];
+    this.transformView[offset + 12] = this.transformView[offset + 5];
+    this.transformView[offset + 13] = this.transformView[offset + 6];
+
+    // Write new current (indices 0-6)
     this.transformView[offset + 0] = posX;
     this.transformView[offset + 1] = posY;
     this.transformView[offset + 2] = posZ;
@@ -150,7 +218,24 @@ export class SharedTransformBuffer {
   }
 
   /**
-   * Increment frame counter after all transforms are written
+   * Write frame timing information
+   * Called by Physics Worker after writing all transforms, before signalFrameComplete
+   *
+   * @param currentTime - performance.now() when this physics frame completed
+   * @param interval - Expected physics interval in ms (e.g., 1000/60 for 60Hz)
+   */
+  writeFrameTiming(currentTime: number, interval: number): void {
+    // Shift current → previous
+    this.timingView[TIMING_PREVIOUS_TIME_INDEX] =
+      this.timingView[TIMING_CURRENT_TIME_INDEX];
+    // Write new current time
+    this.timingView[TIMING_CURRENT_TIME_INDEX] = currentTime;
+    // Write interval
+    this.timingView[TIMING_INTERVAL_INDEX] = interval;
+  }
+
+  /**
+   * Increment frame counter after all transforms and timing are written
    * This signals to the Render Worker that new data is available
    */
   signalFrameComplete(): void {
@@ -165,32 +250,50 @@ export class SharedTransformBuffer {
   }
 
   // ============================================
-  // Render Worker: Read transforms
+  // Render Worker: Read transforms and timing
   // ============================================
 
   /**
-   * Read transform data for an entity
-   * Called by Render Worker each render frame
+   * Read frame timing information
+   * Called by Render Worker to calculate interpolation alpha
+   */
+  readFrameTiming(): FrameTiming {
+    return {
+      currentTime: this.timingView[TIMING_CURRENT_TIME_INDEX],
+      previousTime: this.timingView[TIMING_PREVIOUS_TIME_INDEX],
+      interval: this.timingView[TIMING_INTERVAL_INDEX],
+    };
+  }
+
+  /**
+   * Read both current and previous transform data for an entity
+   * Called by Render Worker each render frame for interpolation
    */
   readTransform(entityIndex: number): {
-    posX: number;
-    posY: number;
-    posZ: number;
-    rotX: number;
-    rotY: number;
-    rotZ: number;
-    rotW: number;
+    current: TransformData;
+    previous: TransformData;
   } {
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
     return {
-      posX: this.transformView[offset + 0],
-      posY: this.transformView[offset + 1],
-      posZ: this.transformView[offset + 2],
-      rotX: this.transformView[offset + 3],
-      rotY: this.transformView[offset + 4],
-      rotZ: this.transformView[offset + 5],
-      rotW: this.transformView[offset + 6],
+      current: {
+        posX: this.transformView[offset + 0],
+        posY: this.transformView[offset + 1],
+        posZ: this.transformView[offset + 2],
+        rotX: this.transformView[offset + 3],
+        rotY: this.transformView[offset + 4],
+        rotZ: this.transformView[offset + 5],
+        rotW: this.transformView[offset + 6],
+      },
+      previous: {
+        posX: this.transformView[offset + 7],
+        posY: this.transformView[offset + 8],
+        posZ: this.transformView[offset + 9],
+        rotX: this.transformView[offset + 10],
+        rotY: this.transformView[offset + 11],
+        rotZ: this.transformView[offset + 12],
+        rotW: this.transformView[offset + 13],
+      },
     };
   }
 

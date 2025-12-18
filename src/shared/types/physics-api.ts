@@ -47,6 +47,7 @@ export interface MovementInput {
 export interface SharedBuffers {
   control: SharedArrayBuffer;
   transform: SharedArrayBuffer;
+  timing: SharedArrayBuffer;
 }
 
 /**

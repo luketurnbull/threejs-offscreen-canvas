@@ -23,33 +23,27 @@ import { PlaneShader } from "./plane";
 import Environment from "./environment";
 
 /**
- * Transform state for interpolation
- */
-interface TransformState {
-  position: THREE.Vector3;
-  quaternion: THREE.Quaternion;
-}
-
-/**
  * RenderEntity - Represents a renderable entity in the scene
+ *
+ * Note: Transform interpolation is now handled via SharedArrayBuffer which
+ * stores both previous and current physics transforms. We no longer need
+ * per-entity interpolation state here.
  */
 interface RenderEntity {
   id: EntityId;
   type: string;
   object: THREE.Object3D;
   mixer?: THREE.AnimationMixer;
-  // For interpolation
-  previousTransform: TransformState;
-  targetTransform: TransformState;
-  lastUpdateTime: number;
 }
 
 /**
  * Renderer - Main Three.js scene orchestrator
  *
  * Manages scene, camera, renderer, and entity-based rendering.
- * Receives transform updates from physics worker.
- * Receives input events from main thread.
+ * Receives transform updates from physics worker via SharedArrayBuffer.
+ * Uses timestamp-based interpolation for smooth motion between physics frames.
+ *
+ * @see https://gafferongames.com/post/fix_your_timestep/
  */
 class Renderer {
   private time: Time;
@@ -69,6 +63,10 @@ class Renderer {
   // Shared buffer for transform sync (required)
   private sharedBuffer: SharedTransformBuffer;
   private lastPhysicsFrame = 0;
+
+  // Temporary quaternions for interpolation (avoid allocation in render loop)
+  private tempQuatPrev = new THREE.Quaternion();
+  private tempQuatCurrent = new THREE.Quaternion();
 
   // Scene objects
   private floor: Floor | null = null;
@@ -239,24 +237,11 @@ class Renderer {
       }
     }
 
-    // Initialize transform states for interpolation
-    const initialTransform: TransformState = {
-      position: object.position.clone(),
-      quaternion: object.quaternion.clone(),
-    };
-
     this.entities.set(id, {
       id,
       type,
       object,
       mixer: type === "player" ? this.fox?.mixer : undefined,
-      previousTransform: {
-        ...initialTransform,
-        position: initialTransform.position.clone(),
-        quaternion: initialTransform.quaternion.clone(),
-      },
-      targetTransform: initialTransform,
-      lastUpdateTime: performance.now(),
     });
 
     // Rebuild shared buffer entity map to get updated indices
@@ -325,11 +310,8 @@ class Renderer {
   }
 
   private update(delta: number): void {
-    const now = performance.now();
-    const physicsInterval = 1000 / 60; // Physics runs at 60Hz
-
-    // Read transforms from SharedArrayBuffer
-    this.readTransformsFromSharedBuffer(now, physicsInterval);
+    // Read transforms from SharedArrayBuffer with timestamp-based interpolation
+    this.readTransformsFromSharedBuffer();
 
     // Update animation mixers
     const deltaSeconds = delta * 0.001;
@@ -346,60 +328,79 @@ class Renderer {
   }
 
   /**
-   * Read transforms directly from SharedArrayBuffer (zero-copy)
+   * Linear interpolation helper
    */
-  private readTransformsFromSharedBuffer(
-    now: number,
-    physicsInterval: number,
-  ): void {
+  private lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+  }
+
+  /**
+   * Read transforms from SharedArrayBuffer with timestamp-based interpolation
+   *
+   * This implements the "Fix Your Timestep!" interpolation pattern:
+   * - Physics writes timestamps along with transforms
+   * - Render calculates alpha based on time since physics frame
+   * - Interpolates between PREVIOUS and CURRENT physics states (not rendered state)
+   *
+   * This ensures smooth motion without discontinuities when new physics frames arrive.
+   */
+  private readTransformsFromSharedBuffer(): void {
+    const now = performance.now();
     const currentFrame = this.sharedBuffer.getFrameCounter();
     const newFrameAvailable = currentFrame !== this.lastPhysicsFrame;
+
+    // Read timing information from physics
+    const timing = this.sharedBuffer.readFrameTiming();
+
+    // Calculate interpolation alpha based on physics timestamps
+    // This gives us smooth 0→1 progress between physics frames
+    const timeSincePhysicsFrame = now - timing.currentTime;
+
+    // Handle edge case where timing hasn't been initialized yet
+    const interval = timing.interval > 0 ? timing.interval : 1000 / 60;
+
+    // Clamp alpha to [0, 1] to prevent overshooting if physics is slow
+    const alpha = Math.min(Math.max(timeSincePhysicsFrame / interval, 0), 1);
 
     for (const entity of this.entities.values()) {
       const bufferIndex = this.sharedBuffer.getEntityIndex(entity.id);
       if (bufferIndex < 0) continue;
 
-      if (newFrameAvailable) {
-        // New physics frame: store old target as previous, read new target
-        entity.previousTransform.position.copy(entity.targetTransform.position);
-        entity.previousTransform.quaternion.copy(
-          entity.targetTransform.quaternion,
-        );
+      // Read both previous and current transforms from shared buffer
+      const transforms = this.sharedBuffer.readTransform(bufferIndex);
 
-        const transform = this.sharedBuffer.readTransform(bufferIndex);
-        entity.targetTransform.position.set(
-          transform.posX,
-          transform.posY,
-          transform.posZ,
-        );
-        entity.targetTransform.quaternion.set(
-          transform.rotX,
-          transform.rotY,
-          transform.rotZ,
-          transform.rotW,
-        );
-        entity.lastUpdateTime = now;
+      // Interpolate position between PREVIOUS and CURRENT physics states
+      // This is the key difference from before: we interpolate between
+      // two known physics states, not between rendered and target
+      entity.object.position.set(
+        this.lerp(transforms.previous.posX, transforms.current.posX, alpha),
+        this.lerp(transforms.previous.posY, transforms.current.posY, alpha),
+        this.lerp(transforms.previous.posZ, transforms.current.posZ, alpha),
+      );
 
-        // Update animation for player
-        if (entity.type === "player" && this.fox) {
-          this.updatePlayerAnimation();
-        }
-      }
-
-      // Interpolate between previous and target
-      const timeSinceUpdate = now - entity.lastUpdateTime;
-      const alpha = Math.min(timeSinceUpdate / physicsInterval, 1);
-
-      entity.object.position.lerpVectors(
-        entity.previousTransform.position,
-        entity.targetTransform.position,
-        alpha,
+      // Spherical interpolation for quaternion rotation
+      this.tempQuatPrev.set(
+        transforms.previous.rotX,
+        transforms.previous.rotY,
+        transforms.previous.rotZ,
+        transforms.previous.rotW,
+      );
+      this.tempQuatCurrent.set(
+        transforms.current.rotX,
+        transforms.current.rotY,
+        transforms.current.rotZ,
+        transforms.current.rotW,
       );
       entity.object.quaternion.slerpQuaternions(
-        entity.previousTransform.quaternion,
-        entity.targetTransform.quaternion,
+        this.tempQuatPrev,
+        this.tempQuatCurrent,
         alpha,
       );
+
+      // Update animation for player when new physics frame arrives
+      if (newFrameAvailable && entity.type === "player" && this.fox) {
+        this.updatePlayerAnimation();
+      }
     }
 
     if (newFrameAvailable) {
@@ -451,6 +452,7 @@ export function createRenderApi(): RenderApi {
       sharedBuffer = new SharedTransformBuffer(
         sharedBuffers.control,
         sharedBuffers.transform,
+        sharedBuffers.timing,
       );
 
       renderer = new Renderer(

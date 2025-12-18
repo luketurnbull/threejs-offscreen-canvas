@@ -52,6 +52,7 @@ class PhysicsWorld {
   // Simulation loop
   private running = false;
   private lastTime = 0;
+  private readonly PHYSICS_INTERVAL = 1000 / 60; // 16.667ms for 60Hz
 
   async init(
     gravity: { x: number; y: number; z: number },
@@ -299,10 +300,14 @@ class PhysicsWorld {
 
     // Write transforms to SharedArrayBuffer
     this.writeTransformsToSharedBuffer();
+
+    // Write frame timing for interpolation (must be after transforms, before signal)
+    this.sharedBuffer.writeFrameTiming(now, this.PHYSICS_INTERVAL);
+
     this.sharedBuffer.signalFrameComplete();
 
     // Schedule next step at 60Hz
-    setTimeout(this.step, 1000 / 60);
+    setTimeout(this.step, this.PHYSICS_INTERVAL);
   };
 
   private updatePlayer(deltaSeconds: number): void {
@@ -418,6 +423,7 @@ export function createPhysicsApi(): PhysicsApi {
       sharedBuffer = new SharedTransformBuffer(
         sharedBuffers.control,
         sharedBuffers.transform,
+        sharedBuffers.timing,
       );
 
       physicsWorld = new PhysicsWorld();
