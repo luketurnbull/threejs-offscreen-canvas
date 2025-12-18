@@ -2,39 +2,7 @@
 // Input Events (Main Thread → Workers)
 // ============================================
 
-export type InputEventType =
-  | "pointerdown"
-  | "pointermove"
-  | "pointerup"
-  | "pointercancel"
-  | "wheel"
-  | "contextmenu"
-  | "keydown"
-  | "keyup";
-
-export interface SerializedPointerEvent {
-  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel";
-  clientX: number;
-  clientY: number;
-  button: number;
-  pointerId: number;
-  pointerType: string;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  metaKey: boolean;
-}
-
-export interface SerializedWheelEvent {
-  type: "wheel";
-  deltaX: number;
-  deltaY: number;
-  deltaMode: number;
-  clientX: number;
-  clientY: number;
-  ctrlKey: boolean;
-  shiftKey: boolean;
-  metaKey: boolean;
-}
+export type InputEventType = "keydown" | "keyup";
 
 export interface SerializedKeyboardEvent {
   type: "keydown" | "keyup";
@@ -46,15 +14,9 @@ export interface SerializedKeyboardEvent {
   repeat: boolean;
 }
 
-export interface SerializedContextMenuEvent {
-  type: "contextmenu";
-}
-
-export type SerializedInputEvent =
-  | SerializedPointerEvent
-  | SerializedWheelEvent
-  | SerializedKeyboardEvent
-  | SerializedContextMenuEvent;
+// Currently only keyboard events are used for player movement.
+// Pointer/wheel events can be added here when needed (e.g., camera orbit).
+export type SerializedInputEvent = SerializedKeyboardEvent;
 
 // ============================================
 // Viewport / Sizing

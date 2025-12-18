@@ -5,10 +5,8 @@ export type {
   DebugUpdateEvent,
   ElementBounds,
   InputEventType,
-  SerializedContextMenuEvent,
   SerializedInputEvent,
-  SerializedPointerEvent,
-  SerializedWheelEvent,
+  SerializedKeyboardEvent,
   ViewportSize,
 } from "./events";
 
