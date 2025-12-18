@@ -1,5 +1,8 @@
 type Callback<T> = (payload: T) => void;
 
+/**
+ * Type-safe event emitter that works in both main thread and workers.
+ */
 export default class EventEmitter<TEvents extends object> {
   private listeners = new Map<keyof TEvents, Set<Callback<unknown>>>();
 
@@ -32,5 +35,9 @@ export default class EventEmitter<TEvents extends object> {
     this.listeners.get(event)?.forEach((cb) => {
       cb(payload);
     });
+  }
+
+  dispose(): void {
+    this.listeners.clear();
   }
 }

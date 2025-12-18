@@ -21,6 +21,7 @@
     "vite": "npm:rolldown-vite@7.2.5"
   },
   "dependencies": {
+    "comlink": "^4.4.2",
     "stats.js": "^0.17.0",
     "three": "^0.182.0",
     "tweakpane": "^4.0.5"

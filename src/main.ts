@@ -1,7 +1,4 @@
-import Experience from "~/experience/index";
+import App from "~/app";
 
-// Get the canvas element
-const canvas = document.querySelector("canvas#webgl") as HTMLCanvasElement;
-
-// Initialize the experience
-new Experience(canvas);
+// Initialize the application
+new App();

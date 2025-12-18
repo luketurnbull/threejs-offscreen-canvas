@@ -1,6 +1,1 @@
-export type {
-  Loader,
-  ResourceItem,
-  Source,
-  SourceType,
-} from "./resources";
+export type { Loader, ResourceItem, Source, SourceType } from "./resources";

@@ -2,6 +2,11 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "~/app": ["src/app/index.ts"],
+      "~/app/*": ["src/app/*"],
+      "~/workers/*": ["src/workers/*"],
+      "~/shared": ["src/shared/index.ts"],
+      "~/shared/*": ["src/shared/*"],
       "~/utils": ["src/utils/index.ts"],
       "~/utils/*": ["src/utils/*"],
       "~/types": ["src/types/index.ts"],

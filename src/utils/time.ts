@@ -1,4 +1,4 @@
-import EventEmitter from "./events";
+import { EventEmitter } from "~/shared/utils";
 
 type TimeEvents = {
   tick: {
@@ -7,6 +7,10 @@ type TimeEvents = {
   };
 };
 
+/**
+ * Time - Animation loop manager
+ * Used as type reference for World components
+ */
 export default class Time extends EventEmitter<TimeEvents> {
   start: number;
   current: number;
@@ -20,25 +24,5 @@ export default class Time extends EventEmitter<TimeEvents> {
     this.current = this.start;
     this.elapsed = 0;
     this.delta = 16;
-
-    window.requestAnimationFrame(() => {
-      this.tick();
-    });
-  }
-
-  private tick(): void {
-    const currentTime = Date.now();
-    this.delta = currentTime - this.current;
-    this.current = currentTime;
-    this.elapsed = this.current - this.start;
-
-    this.emit("tick", {
-      delta: this.delta,
-      elapsed: this.elapsed,
-    });
-
-    window.requestAnimationFrame(() => {
-      this.tick();
-    });
   }
 }
