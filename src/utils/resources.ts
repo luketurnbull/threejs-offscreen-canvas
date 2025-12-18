@@ -1,5 +1,5 @@
 import { EventEmitter } from "~/shared/utils";
-import type { ResourceItem } from "~/types/resources";
+import type { ResourceItem } from "~/shared/types";
 
 type ResourcesEvents = {
   progress: {

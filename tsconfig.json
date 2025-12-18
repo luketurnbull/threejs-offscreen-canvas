@@ -9,8 +9,6 @@
       "~/shared/*": ["src/shared/*"],
       "~/utils": ["src/utils/index.ts"],
       "~/utils/*": ["src/utils/*"],
-      "~/types": ["src/types/index.ts"],
-      "~/types/*": ["src/types/*"],
       "~/constants": ["src/constants/index.ts"],
       "~/constants/*": ["src/constants/*"],
       "~/experience/*": ["src/experience/*"],

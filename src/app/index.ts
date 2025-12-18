@@ -85,12 +85,8 @@ export default class App {
       }),
     );
 
-    // Fetch and register debug bindings
+    // Set up debug callbacks (bindings fetched after world loads in handleLoadComplete)
     if (this.debug.active) {
-      const bindings = await this.renderApi.getDebugBindings();
-      this.debug.registerBindings(bindings);
-
-      // Set up debug callbacks
       this.debug.setUpdateCallback((event) => {
         this.renderApi?.updateDebug(event);
       });
@@ -154,9 +150,14 @@ export default class App {
     // TODO: Update loading UI
   }
 
-  private handleLoadComplete(): void {
+  private async handleLoadComplete(): Promise<void> {
     console.log("Loading complete");
-    // TODO: Hide loading UI, show scene
+
+    // Fetch and register debug bindings now that world is loaded
+    if (this.debug.active && this.renderApi) {
+      const bindings = await this.renderApi.getDebugBindings();
+      this.debug.registerBindings(bindings);
+    }
   }
 
   private startStatsLoop(): void {

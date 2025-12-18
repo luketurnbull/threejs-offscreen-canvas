@@ -10,12 +10,11 @@ import { PlaneShader } from "~/experience/world/objects/plane";
 
 export default class World {
   private scene: THREE.Scene;
-  private onReadyCallback: (() => void) | null = null;
 
-  floor!: Floor;
-  fox!: Fox;
-  environment!: Environment;
-  plane!: PlaneShader;
+  floor: Floor;
+  fox: Fox;
+  environment: Environment;
+  plane: PlaneShader;
 
   constructor(
     scene: THREE.Scene,
@@ -26,29 +25,19 @@ export default class World {
   ) {
     this.scene = scene;
 
-    resources.on("ready", () => {
-      this.floor = new Floor(this.scene, resources);
-      this.fox = new Fox(this.scene, resources, time, debug, inputState);
-      this.plane = new PlaneShader(this.scene, time, debug);
-      this.environment = new Environment(this.scene, resources, debug);
-
-      // Notify that world is ready
-      this.onReadyCallback?.();
-    });
-  }
-
-  /**
-   * Set callback for when world objects are created
-   */
-  onReady(callback: () => void): void {
-    this.onReadyCallback = callback;
+    // Resources are already loaded when World is constructed
+    // (Experience creates World inside resources.on("ready"))
+    this.floor = new Floor(this.scene, resources);
+    this.fox = new Fox(this.scene, resources, time, debug, inputState);
+    this.plane = new PlaneShader(this.scene, time, debug);
+    this.environment = new Environment(this.scene, resources, debug);
   }
 
   /**
    * Get the fox's model for camera following
    */
-  getFoxModel(): THREE.Object3D | null {
-    return this.fox?.model ?? null;
+  getFoxModel(): THREE.Object3D {
+    return this.fox.model;
   }
 
   dispose(): void {

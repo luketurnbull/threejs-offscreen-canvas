@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { EventEmitter } from "~/shared/utils";
-import type { ResourceItem, Source } from "~/types/resources";
+import type { ResourceItem, Source } from "~/shared/types";
 
 type ResourcesEvents = {
   progress: {

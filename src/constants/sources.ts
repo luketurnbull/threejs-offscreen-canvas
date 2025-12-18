@@ -1,4 +1,4 @@
-import type { Source } from "~/types/resources";
+import type { Source } from "~/shared/types";
 
 const sources: Source[] = [
   {

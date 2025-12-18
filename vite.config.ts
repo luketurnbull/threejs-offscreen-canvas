@@ -14,7 +14,6 @@ export default defineConfig({
       "~/workers": fileURLToPath(new URL("./src/workers", import.meta.url)),
       "~/shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
       "~/utils": fileURLToPath(new URL("./src/utils", import.meta.url)),
-      "~/types": fileURLToPath(new URL("./src/types", import.meta.url)),
       "~/constants": fileURLToPath(new URL("./src/constants", import.meta.url)),
       "~/experience": fileURLToPath(
         new URL("./src/experience", import.meta.url),

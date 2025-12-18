@@ -111,13 +111,9 @@ export default class RenderExperience {
         this.inputState as InputStateType,
       );
 
-      // Connect follow camera to fox when world is ready
-      this.world.onReady(() => {
-        const foxModel = this.world?.getFoxModel();
-        if (foxModel) {
-          this.followCamera.setTarget(foxModel);
-        }
-      });
+      // Connect follow camera to fox
+      const foxModel = this.world.getFoxModel();
+      this.followCamera.setTarget(foxModel);
 
       this.onReady?.();
     });

@@ -97,13 +97,15 @@ export default class DebugManager {
 
     switch (binding.type) {
       case "number": {
-        folder.addBinding(obj, binding.label, {
-          min: binding.options?.min,
-          max: binding.options?.max,
-          step: binding.options?.step,
-        }).on("change", (ev) => {
-          this.handleChange(binding.id, ev.value);
-        });
+        folder
+          .addBinding(obj, binding.label, {
+            min: binding.options?.min,
+            max: binding.options?.max,
+            step: binding.options?.step,
+          })
+          .on("change", (ev) => {
+            this.handleChange(binding.id, ev.value);
+          });
         break;
       }
 
@@ -115,20 +117,24 @@ export default class DebugManager {
       }
 
       case "color": {
-        folder.addBinding(obj, binding.label, {
-          color: { type: "float" },
-        }).on("change", (ev) => {
-          this.handleChange(binding.id, ev.value);
-        });
+        folder
+          .addBinding(obj, binding.label, {
+            color: { type: "float" },
+          })
+          .on("change", (ev) => {
+            this.handleChange(binding.id, ev.value);
+          });
         break;
       }
 
       case "select": {
-        folder.addBinding(obj, binding.label, {
-          options: binding.options?.choices,
-        }).on("change", (ev) => {
-          this.handleChange(binding.id, ev.value);
-        });
+        folder
+          .addBinding(obj, binding.label, {
+            options: binding.options?.choices,
+          })
+          .on("change", (ev) => {
+            this.handleChange(binding.id, ev.value);
+          });
         break;
       }
 
@@ -173,12 +179,10 @@ export default class DebugManager {
   }
 
   /**
-   * Update stats with frame timing from worker
+   * Called when worker completes a frame - ends the stats measurement
    */
-  updateFrameTiming(deltaMs: number): void {
-    // Stats.js handles its own timing when using begin/end
-    // This method can be used for custom timing display if needed
-    void deltaMs;
+  updateFrameTiming(_deltaMs: number): void {
+    this.stats?.end();
   }
 
   dispose(): void {
