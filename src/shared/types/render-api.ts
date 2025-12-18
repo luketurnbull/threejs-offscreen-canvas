@@ -5,7 +5,7 @@ import type {
   DebugUpdateEvent,
 } from "./events";
 import type { EntityId } from "./entity";
-import type { SharedBuffers } from "./physics-api";
+import type { SharedBuffers, DebugCollider } from "./physics-api";
 
 /**
  * Render Worker API - exposed via Comlink
@@ -57,11 +57,13 @@ export interface RenderApi {
 
   /**
    * Spawn a render entity (mesh) for a physics entity
+   * @param debugCollider - Optional collider info for debug visualization
    */
   spawnEntity(
     id: EntityId,
     type: string,
     data?: Record<string, unknown>,
+    debugCollider?: DebugCollider,
   ): Promise<void>;
 
   /**

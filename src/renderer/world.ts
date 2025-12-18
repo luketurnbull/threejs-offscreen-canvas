@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { EntityId } from "~/shared/types";
+import type { EntityId, DebugCollider } from "~/shared/types";
 import type Resources from "./resources";
 import type Time from "./time";
 import type Debug from "./debug";
@@ -17,6 +17,7 @@ import {
 import Floor from "./objects/floor";
 import PlaneShader from "./objects/plane";
 import Environment from "./environment";
+import PhysicsDebugRenderer from "./physics-debug-renderer";
 
 /**
  * Context passed to World for creating entities and scene objects
@@ -48,6 +49,10 @@ class World {
   private entityFactory: EntityFactory | null = null;
   private playerEntityId: EntityId | null = null;
 
+  // Debug colliders for physics visualization
+  private debugColliders: Map<EntityId, DebugCollider> = new Map();
+  private physicsDebugRenderer: PhysicsDebugRenderer;
+
   // Scene objects (non-entity visuals that don't need physics sync)
   private sceneObjects: {
     floor: Floor | null;
@@ -57,6 +62,7 @@ class World {
 
   constructor(context: WorldContext) {
     this.context = context;
+    this.physicsDebugRenderer = new PhysicsDebugRenderer(context.scene);
   }
 
   /**
@@ -80,6 +86,25 @@ class World {
     this.sceneObjects.floor = new Floor(scene, resources);
     this.sceneObjects.plane = new PlaneShader(scene, time, debug);
     this.sceneObjects.environment = new Environment(scene, resources, debug);
+
+    // Setup physics debug toggle in debug UI
+    this.setupPhysicsDebugUI();
+  }
+
+  // Physics debug state for UI binding (synced in update loop)
+  private physicsDebugState = { visible: false };
+
+  /**
+   * Setup physics debug controls in the debug UI
+   */
+  private setupPhysicsDebugUI(): void {
+    const { debug } = this.context;
+    if (!debug.active || !debug.ui) return;
+
+    const folder = debug.ui.addFolder({ title: "Physics" });
+    folder.addBinding(this.physicsDebugState, "visible", {
+      label: "Show Colliders",
+    });
   }
 
   /**
@@ -89,6 +114,7 @@ class World {
     id: EntityId,
     type: string,
     data?: Record<string, unknown>,
+    debugCollider?: DebugCollider,
   ): Promise<void> {
     if (!this.entityFactory) {
       throw new Error("World not initialized - call createSceneObjects first");
@@ -98,13 +124,17 @@ class World {
     const entity = await this.entityFactory.create(id, type, data);
     this.entities.set(id, entity);
 
+    // Store debug collider and add debug mesh
+    if (debugCollider) {
+      this.debugColliders.set(id, debugCollider);
+      this.physicsDebugRenderer.addEntity(id, debugCollider);
+    }
+
     // Track player entity for camera following
     if (type === "player") {
       this.playerEntityId = id;
       this.context.camera.setTarget(entity.object);
     }
-
-    console.log("[World] Spawned entity:", id, type);
   }
 
   /**
@@ -117,6 +147,8 @@ class World {
     // Use entity's own dispose method
     entity.dispose();
     this.entities.delete(id);
+    this.debugColliders.delete(id);
+    this.physicsDebugRenderer.removeEntity(id);
 
     if (this.playerEntityId === id) {
       this.playerEntityId = null;
@@ -136,6 +168,13 @@ class World {
    */
   getEntities(): Map<EntityId, RenderComponent> {
     return this.entities;
+  }
+
+  /**
+   * Get all debug colliders (for PhysicsDebugRenderer)
+   */
+  getDebugColliders(): Map<EntityId, DebugCollider> {
+    return this.debugColliders;
   }
 
   /**
@@ -162,6 +201,37 @@ class World {
         entity.onPhysicsFrame?.(this.context.inputState);
       }
     }
+
+    // Sync physics debug visibility from UI state
+    if (
+      this.physicsDebugState.visible !== this.physicsDebugRenderer.isVisible()
+    ) {
+      this.physicsDebugRenderer.setVisible(this.physicsDebugState.visible);
+    }
+
+    // Update physics debug visualization positions
+    this.physicsDebugRenderer.update(this.entities);
+  }
+
+  /**
+   * Toggle physics debug visualization
+   */
+  setPhysicsDebugVisible(visible: boolean): void {
+    this.physicsDebugRenderer.setVisible(visible);
+  }
+
+  /**
+   * Get physics debug visibility state
+   */
+  isPhysicsDebugVisible(): boolean {
+    return this.physicsDebugRenderer.isVisible();
+  }
+
+  /**
+   * Toggle physics debug visualization
+   */
+  togglePhysicsDebug(): void {
+    this.physicsDebugRenderer.toggle();
   }
 
   /**
@@ -178,6 +248,9 @@ class World {
     this.sceneObjects.floor?.dispose();
     this.sceneObjects.plane?.dispose();
     this.sceneObjects.environment?.dispose();
+
+    // Dispose physics debug renderer
+    this.physicsDebugRenderer.dispose();
   }
 }
 

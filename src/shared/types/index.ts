@@ -21,6 +21,8 @@ export type {
   CharacterControllerConfig,
   MovementInput,
   SharedBuffers,
+  DebugCollider,
+  DebugColliderShape,
 } from "./physics-api";
 
 // Entity System

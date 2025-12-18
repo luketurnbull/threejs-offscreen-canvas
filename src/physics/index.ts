@@ -187,6 +187,7 @@ class PhysicsWorld {
     const { world, sharedBuffer } = this.ensureInitialized();
 
     // Create kinematic rigid body for player
+    // Body position represents the feet/bottom of the character
     const bodyDesc =
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(
         transform.position.x,
@@ -196,11 +197,17 @@ class PhysicsWorld {
 
     const body = world.createRigidBody(bodyDesc);
 
-    // Create capsule collider for player
-    const colliderDesc = RAPIER.ColliderDesc.capsule(
-      controllerConfig.capsuleHeight / 2,
-      controllerConfig.capsuleRadius,
+    // Create cuboid collider for player (better for quadruped fox)
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(
+      controllerConfig.halfWidth,
+      controllerConfig.halfHeight,
+      controllerConfig.halfLength,
     );
+
+    // Offset collider so body position = feet position (bottom of collider)
+    // This way when body.y = 0, the character's feet are at ground level
+    colliderDesc.setTranslation(0, controllerConfig.halfHeight, 0);
+
     const collider = world.createCollider(colliderDesc, body);
 
     // Create character controller

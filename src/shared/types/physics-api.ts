@@ -18,14 +18,45 @@ export interface PhysicsBodyConfig {
   restitution?: number;
 }
 
+// ============================================
+// Debug Collider - for physics visualization
+// ============================================
+
+/**
+ * Debug collider shape for visualization in render worker
+ */
+export type DebugColliderShape =
+  | { type: "cuboid"; halfExtents: { x: number; y: number; z: number } }
+  | { type: "capsule"; radius: number; halfHeight: number }
+  | { type: "ball"; radius: number };
+
+/**
+ * Debug collider info passed to render worker for visualization
+ */
+export interface DebugCollider {
+  shape: DebugColliderShape;
+  /** Optional offset from the entity's position (e.g., for colliders offset from body) */
+  offset?: { x: number; y: number; z: number };
+}
+
 /**
  * Character controller configuration
+ *
+ * Uses a cuboid (box) collider for quadruped characters.
+ * The collider is offset so the body position represents the feet/bottom.
  */
 export interface CharacterControllerConfig {
-  capsuleRadius: number;
-  capsuleHeight: number;
+  /** Half-width of the collider (X axis - side to side) */
+  halfWidth: number;
+  /** Half-height of the collider (Y axis - vertical) */
+  halfHeight: number;
+  /** Half-length of the collider (Z axis - front to back) */
+  halfLength: number;
+  /** Maximum step height for auto-stepping */
   stepHeight: number;
+  /** Maximum slope angle the character can climb (degrees) */
   maxSlopeAngle: number;
+  /** Minimum slope angle where character starts sliding (degrees) */
   minSlopeSlideAngle: number;
 }
 

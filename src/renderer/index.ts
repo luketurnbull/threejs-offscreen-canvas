@@ -5,6 +5,7 @@ import type {
   DebugBinding,
   DebugUpdateEvent,
   EntityId,
+  DebugCollider,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
@@ -196,11 +197,12 @@ class Experience {
     id: EntityId,
     type: string,
     data?: Record<string, unknown>,
+    debugCollider?: DebugCollider,
   ): Promise<void> {
     // Wait for resources with timeout
     await this.waitForResources();
 
-    await this.world.spawnEntity(id, type, data);
+    await this.world.spawnEntity(id, type, data, debugCollider);
 
     // Rebuild shared buffer entity map after spawn
     this.transformSync.rebuildEntityMap();

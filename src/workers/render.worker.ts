@@ -15,6 +15,7 @@ import type {
   DebugUpdateEvent,
   EntityId,
   SharedBuffers,
+  DebugCollider,
 } from "~/shared/types";
 import Experience from "../renderer";
 
@@ -80,8 +81,9 @@ function createRenderApi(): RenderApi {
       id: EntityId,
       type: string,
       data?: Record<string, unknown>,
+      debugCollider?: DebugCollider,
     ): Promise<void> {
-      await experience?.spawnEntity(id, type, data);
+      await experience?.spawnEntity(id, type, data, debugCollider);
     },
 
     removeEntity(id: EntityId): void {

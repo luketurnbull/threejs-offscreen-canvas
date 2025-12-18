@@ -7,6 +7,7 @@ import type {
   MovementInput,
   EntityId,
   Transform,
+  DebugCollider,
 } from "~/shared/types";
 import { createEntityId } from "~/shared/types";
 import {
@@ -177,16 +178,52 @@ export default class WorkerBridge {
     this.sharedBuffer.registerEntity(this.playerId);
 
     await this.physicsApi.spawnPlayer(this.playerId, playerTransform, {
-      capsuleRadius: config.characterController.capsuleRadius,
-      capsuleHeight: config.characterController.capsuleHeight,
+      halfWidth: config.characterController.halfWidth,
+      halfHeight: config.characterController.halfHeight,
+      halfLength: config.characterController.halfLength,
       stepHeight: config.characterController.stepHeight,
       maxSlopeAngle: config.characterController.maxSlopeAngle,
       minSlopeSlideAngle: config.characterController.minSlopeSlideAngle,
     });
 
+    // Build debug colliders for visualization
+    const groundDebugCollider: DebugCollider = {
+      shape: {
+        type: "cuboid",
+        halfExtents: {
+          x: config.ground.dimensions.x / 2,
+          y: config.ground.dimensions.y / 2,
+          z: config.ground.dimensions.z / 2,
+        },
+      },
+    };
+
+    const playerDebugCollider: DebugCollider = {
+      shape: {
+        type: "cuboid",
+        halfExtents: {
+          x: config.characterController.halfWidth,
+          y: config.characterController.halfHeight,
+          z: config.characterController.halfLength,
+        },
+      },
+      // Offset to match physics collider (body position = feet, collider raised)
+      offset: { x: 0, y: config.characterController.halfHeight, z: 0 },
+    };
+
     // Spawn render entities for ground and player
-    await this.renderApi.spawnEntity(groundId, "ground");
-    await this.renderApi.spawnEntity(this.playerId, "player");
+    await this.renderApi.spawnEntity(
+      groundId,
+      "ground",
+      undefined,
+      groundDebugCollider,
+    );
+    await this.renderApi.spawnEntity(
+      this.playerId,
+      "player",
+      undefined,
+      playerDebugCollider,
+    );
   }
 
   resize(viewport: ViewportSize): void {

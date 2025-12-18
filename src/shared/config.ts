@@ -48,11 +48,13 @@ export const config = {
     turnSpeed: 3,
   },
 
-  // Character controller
+  // Character controller (cuboid for quadruped fox)
+  // Fox at scale 0.02 is roughly 2 units long, 0.6 wide, 1 unit tall
   characterController: {
-    capsuleRadius: 0.3,
-    capsuleHeight: 0.8,
-    stepHeight: 0.3,
+    halfWidth: 0.3, // X - side to side
+    halfHeight: 0.4, // Y - vertical (fox body height)
+    halfLength: 0.6, // Z - front to back (fox is longer than wide)
+    stepHeight: 0.2,
     maxSlopeAngle: 45,
     minSlopeSlideAngle: 30,
   },
