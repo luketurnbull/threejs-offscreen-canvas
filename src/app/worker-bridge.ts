@@ -95,7 +95,7 @@ export default class WorkerBridge {
     sharedBuffers: { control: SharedArrayBuffer; transform: SharedArrayBuffer },
   ): Promise<void> {
     this.renderWorker = new Worker(
-      new URL("../workers/render/index.ts", import.meta.url),
+      new URL("../workers/render.worker.ts", import.meta.url),
       { type: "module" },
     );
 
@@ -121,7 +121,7 @@ export default class WorkerBridge {
     transform: SharedArrayBuffer;
   }): Promise<void> {
     this.physicsWorker = new Worker(
-      new URL("../workers/physics/index.ts", import.meta.url),
+      new URL("../workers/physics.worker.ts", import.meta.url),
       { type: "module" },
     );
 

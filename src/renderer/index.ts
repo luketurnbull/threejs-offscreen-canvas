@@ -1,24 +1,26 @@
 import * as THREE from "three";
 import type {
+  RenderApi,
   ViewportSize,
   SerializedInputEvent,
   DebugBinding,
   DebugUpdateEvent,
   EntityId,
+  SharedBuffers,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
-import Time from "~/utils/time";
-import Debug from "~/utils/debug";
-import Resources from "~/utils/resources";
 import InputState from "./input-state";
-import FollowCamera from "./controls/follow-camera";
-import sources from "~/constants/sources";
+import FollowCamera from "./camera";
+import Time from "./time";
+import Debug from "./debug";
+import Resources from "./resources";
+import sources from "./sources";
 
 // Scene objects
-import Floor from "./objects/floor";
-import Fox from "./objects/fox";
-import { PlaneShader } from "./objects/plane";
-import Environment from "./systems/environment";
+import Floor from "./floor";
+import Fox from "./fox";
+import { PlaneShader } from "./plane";
+import Environment from "./environment";
 
 /**
  * Transform state for interpolation
@@ -43,13 +45,13 @@ interface RenderEntity {
 }
 
 /**
- * RenderExperience - Main Three.js scene orchestrator in worker context
+ * Renderer - Main Three.js scene orchestrator
  *
  * Manages scene, camera, renderer, and entity-based rendering.
  * Receives transform updates from physics worker.
  * Receives input events from main thread.
  */
-export default class RenderExperience {
+class Renderer {
   private time: Time;
   private debug: Debug;
   private inputState: InputState;
@@ -68,7 +70,7 @@ export default class RenderExperience {
   private sharedBuffer: SharedTransformBuffer;
   private lastPhysicsFrame = 0;
 
-  // Legacy world objects (will be converted to entities)
+  // Scene objects
   private floor: Floor | null = null;
   private fox: Fox | null = null;
   private plane: PlaneShader | null = null;
@@ -145,8 +147,7 @@ export default class RenderExperience {
     });
 
     this.resources.on("ready", () => {
-      // Create legacy world objects (floor, environment, plane shader)
-      // These don't need physics, so we create them directly
+      // Create scene objects (floor, environment, plane shader)
       this.floor = new Floor(this.scene, this.resources);
       this.plane = new PlaneShader(this.scene, this.time, this.debug);
       this.environment = new Environment(
@@ -220,7 +221,6 @@ export default class RenderExperience {
 
       case "ground": {
         // Ground is already created by Floor, just track the entity
-        // Create a dummy object to track (floor already exists)
         object = new THREE.Object3D();
         object.visible = false;
         this.scene.add(object);
@@ -262,7 +262,7 @@ export default class RenderExperience {
     // Rebuild shared buffer entity map to get updated indices
     this.sharedBuffer.rebuildEntityMap();
 
-    console.log("[RenderExperience] Spawned entity:", id, type);
+    console.log("[Renderer] Spawned entity:", id, type);
   }
 
   removeEntity(id: EntityId): void {
@@ -328,7 +328,7 @@ export default class RenderExperience {
     const now = performance.now();
     const physicsInterval = 1000 / 60; // Physics runs at 60Hz
 
-    // Read transforms from SharedArrayBuffer (required)
+    // Read transforms from SharedArrayBuffer
     this.readTransformsFromSharedBuffer(now, physicsInterval);
 
     // Update animation mixers
@@ -416,7 +416,7 @@ export default class RenderExperience {
       this.removeEntity(id);
     }
 
-    // Dispose legacy objects
+    // Dispose scene objects
     this.floor?.dispose();
     this.plane?.dispose();
     this.environment?.dispose();
@@ -425,4 +425,84 @@ export default class RenderExperience {
     this.renderer.dispose();
     this.debug.dispose();
   }
+}
+
+// ============================================
+// API Factory (used by worker entry point)
+// ============================================
+
+let renderer: Renderer | null = null;
+let sharedBuffer: SharedTransformBuffer | null = null;
+
+/**
+ * Creates the RenderApi for Comlink exposure
+ */
+export function createRenderApi(): RenderApi {
+  return {
+    async init(
+      canvas: OffscreenCanvas,
+      viewport: ViewportSize,
+      debug: boolean,
+      sharedBuffers: SharedBuffers,
+      onProgress?: (progress: number) => void,
+      onReady?: () => void,
+      onFrameTiming?: (deltaMs: number) => void,
+    ): Promise<void> {
+      sharedBuffer = new SharedTransformBuffer(
+        sharedBuffers.control,
+        sharedBuffers.transform,
+      );
+
+      renderer = new Renderer(
+        canvas,
+        viewport,
+        debug,
+        sharedBuffer,
+        onProgress,
+        onReady,
+        onFrameTiming,
+      );
+    },
+
+    resize(viewport: ViewportSize): void {
+      renderer?.resize(viewport);
+    },
+
+    handleInput(event: SerializedInputEvent): void {
+      renderer?.handleInput(event);
+    },
+
+    async getDebugBindings(): Promise<DebugBinding[]> {
+      return renderer?.getDebugBindings() ?? [];
+    },
+
+    updateDebug(event: DebugUpdateEvent): void {
+      renderer?.updateDebug(event);
+    },
+
+    triggerDebugAction(id: string): void {
+      renderer?.triggerDebugAction(id);
+    },
+
+    async spawnEntity(
+      id: EntityId,
+      type: string,
+      data?: Record<string, unknown>,
+    ): Promise<void> {
+      await renderer?.spawnEntity(id, type, data);
+    },
+
+    removeEntity(id: EntityId): void {
+      renderer?.removeEntity(id);
+    },
+
+    async getPlayerEntityId(): Promise<EntityId | null> {
+      return renderer?.getPlayerEntityId() ?? null;
+    },
+
+    dispose(): void {
+      renderer?.dispose();
+      renderer = null;
+    },
+  };
 }

@@ -1,29 +1,32 @@
 import RAPIER from "@dimforge/rapier3d-compat";
 import type {
+  PhysicsApi,
   EntityId,
   Transform,
   PhysicsBodyConfig,
   CharacterControllerConfig,
   MovementInput,
+  EntitySpawnData,
+  SharedBuffers,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 
 /**
- * PhysicsWorld - Rapier physics simulation in worker context
+ * PhysicsWorld - Rapier physics simulation
  *
  * Manages physics bodies, character controller, and simulation stepping.
- * Writes transforms to SharedArrayBuffer for zero-copy sync with Render Worker.
+ * Writes transforms to SharedArrayBuffer for zero-copy sync with Renderer.
  */
-export default class PhysicsWorld {
+class PhysicsWorld {
   private world: RAPIER.World | null = null;
   private eventQueue: RAPIER.EventQueue | null = null;
 
   // Entity management
   private bodies: Map<EntityId, RAPIER.RigidBody> = new Map();
   private colliders: Map<EntityId, RAPIER.Collider> = new Map();
-  private entityIndices: Map<EntityId, number> = new Map(); // Maps entity ID to buffer index
+  private entityIndices: Map<EntityId, number> = new Map();
 
-  // Shared buffer for transform sync (required)
+  // Shared buffer for transform sync
   private sharedBuffer!: SharedTransformBuffer;
 
   // Character controller
@@ -154,11 +157,7 @@ export default class PhysicsWorld {
     const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
     this.entityIndices.set(entityId, bufferIndex);
 
-    console.log("[PhysicsWorld] Spawned entity:", entityId, config.type, {
-      position: transform.position,
-      dimensions: config.dimensions,
-      colliderHandle: collider.handle,
-    });
+    console.log("[PhysicsWorld] Spawned entity:", entityId, config.type);
   }
 
   spawnPlayer(
@@ -213,7 +212,7 @@ export default class PhysicsWorld {
     const bufferIndex = this.sharedBuffer.getEntityIndex(id);
     this.entityIndices.set(id, bufferIndex);
 
-    // Initialize rotation from transform (extract Y rotation from quaternion)
+    // Initialize rotation from transform
     this.playerRotationY = this.quaternionToYRotation(transform.rotation);
 
     console.log("[PhysicsWorld] Spawned player:", id);
@@ -225,7 +224,6 @@ export default class PhysicsWorld {
     z: number;
     w: number;
   }): number {
-    // Extract Y rotation (yaw) from quaternion
     const siny_cosp = 2 * (q.w * q.y + q.z * q.x);
     const cosy_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
     return Math.atan2(siny_cosp, cosy_cosp);
@@ -237,7 +235,6 @@ export default class PhysicsWorld {
     z: number;
     w: number;
   } {
-    // Convert Y rotation to quaternion (rotation around Y axis)
     const halfAngle = yRotation / 2;
     return {
       x: 0,
@@ -292,7 +289,7 @@ export default class PhysicsWorld {
     const deltaMs = now - this.lastTime;
     this.lastTime = now;
 
-    const deltaSeconds = Math.min(deltaMs / 1000, 0.1); // Cap at 100ms
+    const deltaSeconds = Math.min(deltaMs / 1000, 0.1);
 
     // Update player movement
     this.updatePlayer(deltaSeconds);
@@ -300,12 +297,12 @@ export default class PhysicsWorld {
     // Step the physics world
     this.world.step(this.eventQueue!);
 
-    // Write transforms directly to SharedArrayBuffer (zero-copy)
+    // Write transforms to SharedArrayBuffer
     this.writeTransformsToSharedBuffer();
-    this.sharedBuffer!.signalFrameComplete();
+    this.sharedBuffer.signalFrameComplete();
 
-    // Schedule next step
-    setTimeout(this.step, 1000 / 60); // 60 Hz physics
+    // Schedule next step at 60Hz
+    setTimeout(this.step, 1000 / 60);
   };
 
   private updatePlayer(deltaSeconds: number): void {
@@ -344,7 +341,7 @@ export default class PhysicsWorld {
     // Compute desired movement
     const desiredMovement = {
       x: moveX * speed * deltaSeconds,
-      y: this.gravity * deltaSeconds, // Apply gravity
+      y: this.gravity * deltaSeconds,
       z: moveZ * speed * deltaSeconds,
     };
 
@@ -371,10 +368,6 @@ export default class PhysicsWorld {
     );
   }
 
-  /**
-   * Write all entity transforms directly to SharedArrayBuffer
-   * Zero-copy sync with Render Worker
-   */
   private writeTransformsToSharedBuffer(): void {
     for (const [id, body] of this.bodies) {
       const bufferIndex = this.entityIndices.get(id);
@@ -383,7 +376,7 @@ export default class PhysicsWorld {
       const pos = body.translation();
       const rot = body.rotation();
 
-      this.sharedBuffer!.writeTransform(
+      this.sharedBuffer.writeTransform(
         bufferIndex,
         pos.x,
         pos.y,
@@ -404,4 +397,80 @@ export default class PhysicsWorld {
     this.world = null;
     this.eventQueue = null;
   }
+}
+
+// ============================================
+// API Factory (used by worker entry point)
+// ============================================
+
+let physicsWorld: PhysicsWorld | null = null;
+let sharedBuffer: SharedTransformBuffer | null = null;
+
+/**
+ * Creates the PhysicsApi for Comlink exposure
+ */
+export function createPhysicsApi(): PhysicsApi {
+  return {
+    async init(
+      gravity: { x: number; y: number; z: number },
+      sharedBuffers: SharedBuffers,
+    ): Promise<void> {
+      sharedBuffer = new SharedTransformBuffer(
+        sharedBuffers.control,
+        sharedBuffers.transform,
+      );
+
+      physicsWorld = new PhysicsWorld();
+      await physicsWorld.init(gravity, sharedBuffer);
+    },
+
+    async spawnEntity(
+      entity: EntitySpawnData,
+      bodyConfig: PhysicsBodyConfig,
+    ): Promise<void> {
+      if (!physicsWorld) {
+        throw new Error("Physics world not initialized");
+      }
+      physicsWorld.spawnEntity(entity.id, entity.transform, bodyConfig);
+    },
+
+    async spawnPlayer(
+      id: EntityId,
+      transform: Transform,
+      config: CharacterControllerConfig,
+    ): Promise<void> {
+      if (!physicsWorld) {
+        throw new Error("Physics world not initialized");
+      }
+      physicsWorld.spawnPlayer(id, transform, config);
+    },
+
+    removeEntity(id: EntityId): void {
+      physicsWorld?.removeEntity(id);
+    },
+
+    setPlayerInput(input: MovementInput): void {
+      physicsWorld?.setPlayerInput(input);
+    },
+
+    start(): void {
+      if (!physicsWorld) {
+        throw new Error("Physics world not initialized");
+      }
+      physicsWorld.start();
+    },
+
+    pause(): void {
+      physicsWorld?.pause();
+    },
+
+    resume(): void {
+      physicsWorld?.resume();
+    },
+
+    dispose(): void {
+      physicsWorld?.dispose();
+      physicsWorld = null;
+    },
+  };
 }

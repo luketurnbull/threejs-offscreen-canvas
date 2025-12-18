@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
-import type Resources from "~/utils/resources";
+import type Resources from "./resources";
 
 /**
  * Fox - Animated fox character mesh

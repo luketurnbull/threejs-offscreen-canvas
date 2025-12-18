@@ -1,16 +1,15 @@
-# Three.js Starter
+# Three.js Multi-Worker Architecture
 
-A modern Three.js boilerplate inspired by [Bruno Simon's](https://threejs-journey.com/) course structure, with several architectural improvements.
+A high-performance Three.js boilerplate with physics simulation using a multi-worker architecture. Rendering and physics run in separate Web Workers for maximum performance.
 
-## Key Differences from Bruno's Approach
+## Features
 
+- **OffscreenCanvas Rendering** - Three.js renders entirely in a Web Worker
+- **Rapier Physics** - Physics simulation in a dedicated worker
+- **SharedArrayBuffer** - Zero-copy transform synchronization between workers
+- **Comlink RPC** - Type-safe communication between main thread and workers
 - **TypeScript** - Full type safety throughout
-- **Bun** - Fast package manager and runtime
-- **Dependency Injection** - Classes receive dependencies via constructor instead of singleton pattern
-- **Type-safe EventEmitter** - Generic event emitter with typed payloads instead of a generic callback system
-- **Stats.js** - Performance monitoring in debug mode
-- **Shader Examples** - Includes GLSL shader integration with `vite-plugin-glsl`
-- **Up-to-date Dependencies** - All packages are current (Three.js r182, Vite, TypeScript 5.9)
+- **Entity System** - Unified entity management across workers
 
 ## Getting Started
 
@@ -23,51 +22,88 @@ bun run dev
 
 Add `#debug` to the URL to enable Tweakpane controls and Stats.js performance monitor.
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         MAIN THREAD                              │
+│  App → WorkerBridge → InputManager, DebugManager, CanvasManager │
+└─────────────────────────────────────────────────────────────────┘
+                    │                           │
+         ┌──────────┴───────────┐    ┌─────────┴──────────┐
+         │   PHYSICS WORKER     │    │   RENDER WORKER    │
+         │   (Rapier @ 60Hz)    │    │   (Three.js @ rAF) │
+         └──────────┬───────────┘    └─────────┬──────────┘
+                    │                          │
+                    └────── SharedArrayBuffer ─┘
+                         (Zero-copy transforms)
+```
+
 ## Project Structure
 
 ```
 src/
-├── constants/
-│   ├── config.ts        # Scene configuration
-│   └── sources.ts       # Asset definitions
-├── experience/
-│   ├── index.ts         # Main orchestrator
-│   ├── camera.ts        # Camera + OrbitControls
-│   ├── renderer.ts      # WebGL renderer
-│   └── world/
-│       ├── objects/     # Scene meshes (floor, fox, plane)
-│       └── systems/     # Non-mesh systems (environment, lighting)
-├── shaders/             # Shared GLSL utilities
-├── types/
-│   └── resources.ts     # Resource type definitions
-└── utils/
-    ├── debug.ts         # Tweakpane + Stats.js wrapper
-    ├── events.ts        # Type-safe EventEmitter
-    ├── resources.ts     # Asset loader with progress events
-    ├── sizes.ts         # Viewport (resize events)
-    └── time.ts          # Animation loop (tick events)
+  main.ts                     # Entry point
+  
+  app/                        # Main thread orchestration
+    index.ts                  # App orchestrator
+    worker-bridge.ts          # Worker lifecycle & communication
+    canvas-manager.ts         # Canvas & OffscreenCanvas transfer
+    input-manager.ts          # DOM event capture
+    debug-manager.ts          # Tweakpane & Stats.js
+    
+  renderer/                   # Three.js domain (flat)
+    index.ts                  # Renderer class + createRenderApi
+    time.ts                   # requestAnimationFrame loop
+    resources.ts              # Asset loading
+    debug.ts                  # Debug bindings
+    camera.ts                 # FollowCamera controller
+    input-state.ts            # Input state tracking
+    config.ts                 # Renderer configuration
+    sources.ts                # Asset definitions
+    floor.ts                  # Ground plane
+    fox.ts                    # Animated character
+    plane.ts                  # Shader plane
+    plane.vert                # Vertex shader
+    plane.frag                # Fragment shader
+    environment.ts            # Lighting & environment
+    
+  physics/                    # Rapier domain (flat)
+    index.ts                  # PhysicsWorld + createPhysicsApi
+    
+  workers/                    # Thin worker entry points
+    render.worker.ts          # import + Comlink.expose
+    physics.worker.ts         # import + Comlink.expose
+    
+  shared/                     # Cross-worker contracts
+    types/                    # API interfaces, entity types
+    buffers/                  # SharedArrayBuffer wrappers
+    utils/                    # EventEmitter
 ```
 
-## Path Aliases
+## Adding a New Worker
 
-All imports use `~/` prefix for project-specific modules:
+1. Create domain module: `src/audio/index.ts`
+2. Create thin worker entry: `src/workers/audio.worker.ts`
+3. Add API types: `src/shared/types/audio-api.ts`
+4. Register in WorkerBridge
 
-```typescript
-import { config, sources } from "~/constants";
-import { Time, Sizes, Debug } from "~/utils";
-import type { Source } from "~/types";
+## SharedArrayBuffer Requirements
+
+This project requires `SharedArrayBuffer` which needs specific HTTP headers:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
 ```
 
-## Loading Progress
+These are configured in `vite.config.ts` for both dev and preview servers.
 
-Subscribe to resource loading progress:
+## Browser Support
 
-```typescript
-resources.on("progress", ({ loaded, total, progress }) => {
-  console.log(`Loading: ${Math.round(progress * 100)}%`);
-});
+Requires:
+- OffscreenCanvas (Chrome 69+, Firefox 105+, Safari 16.4+)
+- SharedArrayBuffer (requires COOP/COEP headers)
+- ES Modules in Workers
 
-resources.on("ready", () => {
-  console.log("All assets loaded!");
-});
-```
+No fallback - shows error if unsupported.

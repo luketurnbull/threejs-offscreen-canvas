@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type Resources from "~/utils/resources";
-import type Debug from "~/utils/debug";
-import type { DebugFolder } from "~/utils/debug";
+import type Resources from "./resources";
+import type Debug from "./debug";
+import type { DebugFolder } from "./debug";
 
 export default class Environment {
   private scene: THREE.Scene;

@@ -26,8 +26,6 @@ export default defineConfig({
       "~/app": fileURLToPath(new URL("./src/app", import.meta.url)),
       "~/workers": fileURLToPath(new URL("./src/workers", import.meta.url)),
       "~/shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
-      "~/utils": fileURLToPath(new URL("./src/utils", import.meta.url)),
-      "~/constants": fileURLToPath(new URL("./src/constants", import.meta.url)),
       "~/shaders": fileURLToPath(new URL("./src/shaders", import.meta.url)),
     },
   },

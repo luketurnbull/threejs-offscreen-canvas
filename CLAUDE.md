@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- **Dev server**: `npm run dev` - Start Vite dev server with HMR
-- **Build**: `npm run build` - TypeScript check + Vite production build
-- **Preview**: `npm run preview` - Preview production build locally
+- **Dev server**: `bun run dev` - Start Vite dev server with HMR
+- **Build**: `bun run build` - TypeScript check + Vite production build
+- **Preview**: `bun run preview` - Preview production build locally
 
 ## Debug Mode
 
@@ -16,75 +16,73 @@ Add `#debug` to the URL (e.g., `http://localhost:5173/#debug`) to enable:
 
 ## Architecture
 
-This is a Three.js starter using TypeScript and Vite with an event-driven class-based architecture.
+Multi-worker Three.js application with physics. See `docs/architecture.md` for full details.
+
+### Design Principles
+
+1. **Workers are thin** - Worker files are just Comlink entry points, not application logic
+2. **Domain-based organization** - Code is organized by what it does (`renderer/`, `physics/`), not where it runs
+3. **Flat structure** - Minimal nesting, ~10 files per domain folder
+4. **Explicit contracts** - `shared/` contains only cross-worker types and buffers
+
+### Project Structure
+
+```
+src/
+  main.ts                 # Entry point
+  
+  app/                    # Main thread orchestration
+  renderer/               # Three.js domain code (flat)
+  physics/                # Rapier domain code (flat)
+  workers/                # Thin worker entry points
+  shared/                 # Cross-worker types & buffers
+  shaders/                # Shared GLSL utilities
+```
 
 ### Path Aliases
 
-- `~/utils` → `src/utils/` - Utility classes
-- `~/types` → `src/types/` - Type definitions
-- `~/constants` → `src/constants/` - Configuration and sources
-- `~/experience/*` → `src/experience/*` - Experience classes
-- `~/shaders/*` → `src/shaders/*` - Shared GLSL utilities
+- `~/app` → `src/app/`
+- `~/shared` → `src/shared/`
+- `~/shaders` → `src/shaders/`
 
-### Core Structure
+Domain folders (`renderer/`, `physics/`) use relative imports.
 
-**Experience** (`src/experience/index.ts`) - Main orchestrator that initializes all systems and manages the render loop via event subscriptions.
+### Adding a New Worker
 
-**Utils** (`src/utils/`):
-- `EventEmitter` - Type-safe pub/sub base class used throughout
-- `Time` - Emits `tick` events with `delta` and `elapsed` values each frame
-- `Sizes` - Emits `resize` events with viewport dimensions
-- `Resources` - Async asset loader that emits `progress` and `ready` events
-- `Debug` - Tweakpane + Stats.js wrapper, active when URL hash is `#debug`
-
-**Constants** (`src/constants/`):
-- `config.ts` - Scene configuration (camera, renderer, shadows)
-- `sources.ts` - Asset definitions
-
-**World** (`src/experience/world/`) - Scene content organized by purpose:
-- `objects/` - Meshes and models (floor, fox, plane)
-- `systems/` - Non-mesh scene setup (environment, lighting)
-
-### Resource Loading
-
-Define assets in `src/constants/sources.ts` with `name`, `type` (`texture`, `cubeTexture`, `gltfModel`), and `path`. Access loaded assets via `resources.items[name]` after the `ready` event.
-
-```typescript
-// Track loading progress
-resources.on("progress", ({ progress }) => {
-  console.log(`${Math.round(progress * 100)}%`);
-});
-```
-
-### GLSL Shaders
-
-- **Component-specific shaders**: Co-locate with the component (e.g., `world/objects/plane/vertex.vert`)
-- **Shared shader utilities**: Place in `src/shaders/` for reusable GLSL chunks
-
-Import via `vite-plugin-glsl`:
-```typescript
-import vertexShader from "./vertex.vert";
-```
+1. Create domain folder: `src/audio/index.ts`
+2. Create thin worker entry: `src/workers/audio.worker.ts`
+3. Add API types: `src/shared/types/audio-api.ts`
+4. Register in WorkerBridge
 
 ### Adding Scene Objects
 
-1. Create a class in `src/experience/world/objects/`
-2. Store scene reference and any event unsubscribe functions
-3. Instantiate in `World` constructor (after `resources.ready` if assets needed)
-4. Subscribe to `time.on("tick")` for animations, storing the unsubscribe function
-5. Implement `dispose()` to clean up geometry, materials, event subscriptions, and remove from scene
+Create a flat file in `renderer/`:
 
 ```typescript
+// renderer/my-object.ts
+import * as THREE from "three";
+import type Resources from "./resources";
+import type Time from "./time";
+
 export default class MyObject {
   private scene: THREE.Scene;
+  private mesh: THREE.Mesh;
   private unsubscribeTick: (() => void) | null = null;
-  
-  constructor(scene: THREE.Scene, time: Time) {
+
+  constructor(scene: THREE.Scene, resources: Resources, time: Time) {
     this.scene = scene;
-    // ... create mesh
-    this.unsubscribeTick = time.on("tick", () => this.update());
+    
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh.castShadow = true;
+    this.scene.add(this.mesh);
+
+    this.unsubscribeTick = time.on("tick", ({ elapsed }) => {
+      this.mesh.rotation.y = elapsed * 0.001;
+    });
   }
-  
+
   dispose(): void {
     this.unsubscribeTick?.();
     this.mesh.geometry.dispose();
@@ -93,3 +91,40 @@ export default class MyObject {
   }
 }
 ```
+
+### GLSL Shaders
+
+- **Co-locate with component**: `renderer/plane.vert`, `renderer/plane.frag`
+- **Shared utilities**: `src/shaders/` for reusable GLSL chunks
+
+```typescript
+import vertexShader from "./plane.vert";
+import fragmentShader from "./plane.frag";
+```
+
+### Entity System
+
+Entities have a unique `EntityId` tracked across workers:
+
+```typescript
+import { createEntityId } from "~/shared/types";
+
+const id = createEntityId();  // Branded number type
+await physicsApi.spawnEntity(id, transform, bodyConfig);
+await renderApi.spawnEntity(id, "player");
+```
+
+### SharedArrayBuffer
+
+Physics writes transforms, Render reads them (zero-copy):
+
+```typescript
+// Physics worker writes
+sharedBuffer.writeTransform(index, posX, posY, posZ, rotX, rotY, rotZ, rotW);
+sharedBuffer.signalFrameComplete();
+
+// Render worker reads
+const transform = sharedBuffer.readTransform(index);
+```
+
+Requires COOP/COEP headers (configured in `vite.config.ts`).
