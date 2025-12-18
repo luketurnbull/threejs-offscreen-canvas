@@ -4,17 +4,16 @@ import type { FolderApi } from "tweakpane";
 import type Resources from "~/utils/resources";
 import type Time from "~/utils/time";
 import type Debug from "~/utils/debug";
-import type InputState from "~/workers/render/input-state";
 
+/**
+ * Fox - Animated fox character mesh
+ *
+ * Handles rendering and animation only.
+ * Movement is controlled by the Physics Worker.
+ */
 export default class Fox {
   private scene: THREE.Scene;
-  private inputState: InputState | null = null;
   private unsubscribeTick: (() => void) | null = null;
-
-  // Movement settings
-  private moveSpeed = 3;
-  private runSpeedMultiplier = 2;
-  private turnSpeed = 3;
 
   debugFolder: FolderApi | null = null;
   resource: GLTF;
@@ -31,12 +30,10 @@ export default class Fox {
   constructor(
     scene: THREE.Scene,
     resources: Resources,
-    time: Time,
+    _time: Time,
     debug: Debug,
-    inputState?: InputState,
   ) {
     this.scene = scene;
-    this.inputState = inputState ?? null;
     this.resource = resources.items.foxModel as GLTF;
 
     // Set scale
@@ -68,76 +65,8 @@ export default class Fox {
     // Add debug folder
     this.addDebugFolder(debug);
 
-    // Set update
-    this.unsubscribeTick = time.on("tick", ({ delta }) => {
-      this.update(delta);
-    });
-  }
-
-  private update(delta: number): void {
-    const deltaSeconds = delta * 0.001;
-
-    // Update animation mixer
-    this.mixer.update(deltaSeconds);
-
-    // Handle movement if inputState is available
-    if (this.inputState) {
-      this.handleMovement(deltaSeconds);
-    }
-  }
-
-  private handleMovement(deltaSeconds: number): void {
-    if (!this.inputState) return;
-
-    const isForward = this.inputState.isKeyDown("w");
-    const isTurnLeft = this.inputState.isKeyDown("a");
-    const isTurnRight = this.inputState.isKeyDown("d");
-    const isRunning = this.inputState.isKeyDown("shift");
-
-    const isMoving = isForward;
-    const isTurning = isTurnLeft || isTurnRight;
-
-    // Handle rotation (A/D turns the fox)
-    if (isTurnLeft) {
-      this.model.rotation.y += this.turnSpeed * deltaSeconds;
-    }
-    if (isTurnRight) {
-      this.model.rotation.y -= this.turnSpeed * deltaSeconds;
-    }
-
-    // Handle forward movement (W moves in facing direction)
-    if (isForward) {
-      const speed = isRunning
-        ? this.moveSpeed * this.runSpeedMultiplier
-        : this.moveSpeed;
-
-      // Move in the direction the fox is facing
-      // Fox model faces +Z in local space, so we use sin/cos based on Y rotation
-      const direction = new THREE.Vector3(
-        Math.sin(this.model.rotation.y),
-        0,
-        Math.cos(this.model.rotation.y),
-      );
-
-      this.model.position.addScaledVector(direction, speed * deltaSeconds);
-    }
-
-    // Update animation based on state
-    if (isMoving) {
-      const targetAnimation = isRunning ? "running" : "walking";
-      if (this.actions.current !== this.actions[targetAnimation]) {
-        this.play(targetAnimation);
-      }
-    } else if (isTurning) {
-      // Play walk animation when turning in place
-      if (this.actions.current !== this.actions.walking) {
-        this.play("walking");
-      }
-    } else {
-      if (this.actions.current !== this.actions.idle) {
-        this.play("idle");
-      }
-    }
+    // Note: Animation mixer is updated externally by RenderExperience
+    // Movement is handled by Physics Worker
   }
 
   addDebugFolder(debug: Debug) {

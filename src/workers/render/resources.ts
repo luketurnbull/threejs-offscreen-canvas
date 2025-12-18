@@ -25,6 +25,7 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
   items: Record<string, ResourceItem>;
   toLoad: number;
   loaded: number;
+  isReady: boolean;
 
   private gltfLoader: GLTFLoader;
   private baseUrl: string;
@@ -35,6 +36,7 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
     this.items = {};
     this.toLoad = sources.length;
     this.loaded = 0;
+    this.isReady = false;
 
     // Get base URL for resolving relative paths in worker
     this.baseUrl = self.location.origin + "/";
@@ -142,6 +144,7 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
     });
 
     if (this.loaded === this.toLoad) {
+      this.isReady = true;
       this.emit("ready", {
         itemsLoaded: this.loaded,
       });

@@ -4,6 +4,7 @@ import type {
   DebugBinding,
   DebugUpdateEvent,
 } from "./events";
+import type { EntityId, TransformUpdateBatch } from "./entity";
 
 /**
  * Render Worker API - exposed via Comlink
@@ -47,6 +48,34 @@ export interface RenderApi {
    * Trigger a debug button action
    */
   triggerDebugAction(id: string): void;
+
+  // ============================================
+  // Entity Management (for physics sync)
+  // ============================================
+
+  /**
+   * Spawn a render entity (mesh) for a physics entity
+   */
+  spawnEntity(
+    id: EntityId,
+    type: string,
+    data?: Record<string, unknown>,
+  ): Promise<void>;
+
+  /**
+   * Remove a render entity
+   */
+  removeEntity(id: EntityId): void;
+
+  /**
+   * Apply transform updates from physics worker
+   */
+  applyTransformUpdates(updates: TransformUpdateBatch): void;
+
+  /**
+   * Get the player entity ID (for camera following)
+   */
+  getPlayerEntityId(): Promise<EntityId | null>;
 
   /**
    * Clean up and dispose resources

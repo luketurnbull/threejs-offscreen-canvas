@@ -1,22 +1,20 @@
-import * as Comlink from "comlink";
-import type { RenderApi, ViewportSize } from "~/shared/types";
+import type { ViewportSize } from "~/shared/types";
 import CanvasManager from "./canvas-manager";
 import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
+import WorkerBridge from "./worker-bridge";
 
 /**
  * App - Main thread orchestrator
  *
- * Coordinates all managers and worker communication.
+ * Coordinates all managers and worker communication via WorkerBridge.
  * Handles initialization sequence and lifecycle.
  */
 export default class App {
   private canvas: CanvasManager;
   private input: InputManager;
   private debug: DebugManager;
-
-  private renderWorker: Worker | null = null;
-  private renderApi: Comlink.Remote<RenderApi> | null = null;
+  private bridge: WorkerBridge;
 
   private resizeObserver: ResizeObserver | null = null;
   private _initialized = false;
@@ -39,6 +37,7 @@ export default class App {
     this.canvas = new CanvasManager(canvasElement);
     this.input = new InputManager(canvasElement);
     this.debug = new DebugManager();
+    this.bridge = new WorkerBridge();
 
     // Start initialization
     this.init();
@@ -46,7 +45,7 @@ export default class App {
 
   private async init(): Promise<void> {
     try {
-      await this.initRenderWorker();
+      await this.initWorkers();
       this.setupEventListeners();
       this._initialized = true;
       console.log("App initialized successfully");
@@ -56,51 +55,40 @@ export default class App {
     }
   }
 
-  private async initRenderWorker(): Promise<void> {
-    // Create worker
-    this.renderWorker = new Worker(
-      new URL("../workers/render/index.ts", import.meta.url),
-      { type: "module" },
-    );
-
-    // Wrap with Comlink for type-safe RPC
-    this.renderApi = Comlink.wrap<RenderApi>(this.renderWorker);
-
-    // Transfer canvas to worker
+  private async initWorkers(): Promise<void> {
+    // Transfer canvas to worker bridge
     const offscreen = this.canvas.transferToOffscreen();
     const viewport = this.canvas.getViewport();
 
-    await this.renderApi.init(
-      Comlink.transfer(offscreen, [offscreen]),
-      viewport,
-      this.debug.active,
-      Comlink.proxy((progress: number) => {
+    await this.bridge.init(offscreen, viewport, this.debug.active, {
+      onProgress: (progress: number) => {
         this.handleLoadProgress(progress);
-      }),
-      Comlink.proxy(() => {
+      },
+      onReady: () => {
         this.handleLoadComplete();
-      }),
-      Comlink.proxy((deltaMs: number) => {
+      },
+      onFrameTiming: (deltaMs: number) => {
         this.debug.updateFrameTiming(deltaMs);
-      }),
-    );
+      },
+    });
 
-    // Set up debug callbacks (bindings fetched after world loads in handleLoadComplete)
-    if (this.debug.active) {
+    // Set up debug callbacks
+    const renderApi = this.bridge.getRenderApi();
+    if (this.debug.active && renderApi) {
       this.debug.setUpdateCallback((event) => {
-        this.renderApi?.updateDebug(event);
+        renderApi.updateDebug(event);
       });
 
       this.debug.setActionCallback((id) => {
-        this.renderApi?.triggerDebugAction(id);
+        renderApi.triggerDebugAction(id);
       });
     }
   }
 
   private setupEventListeners(): void {
-    // Input events -> Worker
+    // Input events -> WorkerBridge (routes to both workers)
     this.input.setEventCallback((event) => {
-      this.renderApi?.handleInput(event);
+      this.bridge.handleInput(event);
     });
 
     // Resize handling
@@ -134,15 +122,13 @@ export default class App {
   }
 
   private handleResize(): void {
-    if (!this.renderApi) return;
-
     const viewport: ViewportSize = {
       width: this.canvas.element.clientWidth,
       height: this.canvas.element.clientHeight,
       pixelRatio: Math.min(window.devicePixelRatio, 2),
     };
 
-    this.renderApi.resize(viewport);
+    this.bridge.resize(viewport);
   }
 
   private handleLoadProgress(progress: number): void {
@@ -154,8 +140,9 @@ export default class App {
     console.log("Loading complete");
 
     // Fetch and register debug bindings now that world is loaded
-    if (this.debug.active && this.renderApi) {
-      const bindings = await this.renderApi.getDebugBindings();
+    const renderApi = this.bridge.getRenderApi();
+    if (this.debug.active && renderApi) {
+      const bindings = await renderApi.getDebugBindings();
       this.debug.registerBindings(bindings);
     }
   }
@@ -222,12 +209,7 @@ export default class App {
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.debug.dispose();
-
-    this.renderApi?.dispose();
-    this.renderWorker?.terminate();
-
-    this.renderWorker = null;
-    this.renderApi = null;
+    this.bridge.dispose();
     this._initialized = false;
   }
 

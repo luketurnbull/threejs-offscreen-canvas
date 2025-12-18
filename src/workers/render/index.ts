@@ -5,6 +5,8 @@ import type {
   SerializedInputEvent,
   DebugBinding,
   DebugUpdateEvent,
+  EntityId,
+  TransformUpdateBatch,
 } from "~/shared/types";
 import RenderExperience from "./experience";
 
@@ -47,6 +49,27 @@ const api: RenderApi = {
 
   triggerDebugAction(id: string): void {
     experience?.triggerDebugAction(id);
+  },
+
+  // Entity management
+  async spawnEntity(
+    id: EntityId,
+    type: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    await experience?.spawnEntity(id, type, data);
+  },
+
+  removeEntity(id: EntityId): void {
+    experience?.removeEntity(id);
+  },
+
+  applyTransformUpdates(updates: TransformUpdateBatch): void {
+    experience?.applyTransformUpdates(updates);
+  },
+
+  async getPlayerEntityId(): Promise<EntityId | null> {
+    return experience?.getPlayerEntityId() ?? null;
   },
 
   dispose(): void {

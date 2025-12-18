@@ -46,8 +46,10 @@ export default class FollowCamera {
   /**
    * Set the target object to follow
    */
-  setTarget(target: THREE.Object3D): void {
+  setTarget(target: THREE.Object3D | null): void {
     this.target = target;
+
+    if (!target) return;
 
     // Initialize camera position behind target
     this.calculateIdealOffset();
