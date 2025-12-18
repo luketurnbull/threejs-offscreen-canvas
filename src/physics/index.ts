@@ -10,6 +10,7 @@ import type {
   SharedBuffers,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
+import { config } from "~/shared/config";
 
 /**
  * PhysicsWorld - Rapier physics simulation
@@ -20,14 +21,13 @@ import { SharedTransformBuffer } from "~/shared/buffers";
 class PhysicsWorld {
   private world: RAPIER.World | null = null;
   private eventQueue: RAPIER.EventQueue | null = null;
+  private sharedBuffer: SharedTransformBuffer | null = null;
+  private initialized = false;
 
   // Entity management
   private bodies: Map<EntityId, RAPIER.RigidBody> = new Map();
   private colliders: Map<EntityId, RAPIER.Collider> = new Map();
   private entityIndices: Map<EntityId, number> = new Map();
-
-  // Shared buffer for transform sync
-  private sharedBuffer!: SharedTransformBuffer;
 
   // Character controller
   private characterController: RAPIER.KinematicCharacterController | null =
@@ -43,16 +43,16 @@ class PhysicsWorld {
   };
   private playerRotationY = 0;
 
-  // Movement settings
-  private readonly moveSpeed = 3;
-  private readonly sprintMultiplier = 2;
-  private readonly turnSpeed = 3;
-  private readonly gravity = -20;
+  // Movement settings from config
+  private readonly moveSpeed = config.player.moveSpeed;
+  private readonly sprintMultiplier = config.player.sprintMultiplier;
+  private readonly turnSpeed = config.player.turnSpeed;
+  private readonly gravity = config.physics.gravity.y;
 
   // Simulation loop
   private running = false;
   private lastTime = 0;
-  private readonly PHYSICS_INTERVAL = 1000 / 60; // 16.667ms for 60Hz
+  private readonly PHYSICS_INTERVAL = config.physics.interval;
 
   async init(
     gravity: { x: number; y: number; z: number },
@@ -69,22 +69,42 @@ class PhysicsWorld {
     // Create event queue for collision events
     this.eventQueue = new RAPIER.EventQueue(true);
 
-    console.log("[PhysicsWorld] Initialized with gravity:", gravity);
+    this.initialized = true;
+  }
+
+  /**
+   * Check if the physics world has been initialized and throw if not
+   */
+  private ensureInitialized(): {
+    world: RAPIER.World;
+    sharedBuffer: SharedTransformBuffer;
+    eventQueue: RAPIER.EventQueue;
+  } {
+    if (
+      !this.initialized ||
+      !this.world ||
+      !this.sharedBuffer ||
+      !this.eventQueue
+    ) {
+      throw new Error("PhysicsWorld not initialized - call init() first");
+    }
+    return {
+      world: this.world,
+      sharedBuffer: this.sharedBuffer,
+      eventQueue: this.eventQueue,
+    };
   }
 
   spawnEntity(
     entityId: EntityId,
     transform: Transform,
-    config: PhysicsBodyConfig,
+    bodyConfig: PhysicsBodyConfig,
   ): void {
-    if (!this.world) {
-      console.error("[PhysicsWorld] World not initialized");
-      return;
-    }
+    const { world, sharedBuffer } = this.ensureInitialized();
 
     // Create rigid body descriptor
     let bodyDesc: RAPIER.RigidBodyDesc;
-    switch (config.type) {
+    switch (bodyConfig.type) {
       case "static":
         bodyDesc = RAPIER.RigidBodyDesc.fixed();
         break;
@@ -110,66 +130,61 @@ class PhysicsWorld {
     });
 
     // Create the body
-    const body = this.world.createRigidBody(bodyDesc);
+    const body = world.createRigidBody(bodyDesc);
 
     // Create collider
     let colliderDesc: RAPIER.ColliderDesc;
-    switch (config.colliderType) {
+    switch (bodyConfig.colliderType) {
       case "cuboid":
         colliderDesc = RAPIER.ColliderDesc.cuboid(
-          config.dimensions.x / 2,
-          config.dimensions.y / 2,
-          config.dimensions.z / 2,
+          bodyConfig.dimensions.x / 2,
+          bodyConfig.dimensions.y / 2,
+          bodyConfig.dimensions.z / 2,
         );
         break;
       case "ball":
-        colliderDesc = RAPIER.ColliderDesc.ball(config.radius ?? 0.5);
+        colliderDesc = RAPIER.ColliderDesc.ball(bodyConfig.radius ?? 0.5);
         break;
       case "capsule":
         colliderDesc = RAPIER.ColliderDesc.capsule(
-          (config.height ?? 1) / 2,
-          config.radius ?? 0.5,
+          (bodyConfig.height ?? 1) / 2,
+          bodyConfig.radius ?? 0.5,
         );
         break;
       default:
         colliderDesc = RAPIER.ColliderDesc.cuboid(
-          config.dimensions.x / 2,
-          config.dimensions.y / 2,
-          config.dimensions.z / 2,
+          bodyConfig.dimensions.x / 2,
+          bodyConfig.dimensions.y / 2,
+          bodyConfig.dimensions.z / 2,
         );
     }
 
     // Set physics properties
-    if (config.friction !== undefined) {
-      colliderDesc.setFriction(config.friction);
+    if (bodyConfig.friction !== undefined) {
+      colliderDesc.setFriction(bodyConfig.friction);
     }
-    if (config.restitution !== undefined) {
-      colliderDesc.setRestitution(config.restitution);
+    if (bodyConfig.restitution !== undefined) {
+      colliderDesc.setRestitution(bodyConfig.restitution);
     }
 
-    const collider = this.world.createCollider(colliderDesc, body);
+    const collider = world.createCollider(colliderDesc, body);
 
     // Store references
     this.bodies.set(entityId, body);
     this.colliders.set(entityId, collider);
 
     // Get buffer index from shared buffer (already registered by main thread)
-    this.sharedBuffer.rebuildEntityMap();
-    const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
+    sharedBuffer.rebuildEntityMap();
+    const bufferIndex = sharedBuffer.getEntityIndex(entityId);
     this.entityIndices.set(entityId, bufferIndex);
-
-    console.log("[PhysicsWorld] Spawned entity:", entityId, config.type);
   }
 
   spawnPlayer(
     id: EntityId,
     transform: Transform,
-    config: CharacterControllerConfig,
+    controllerConfig: CharacterControllerConfig,
   ): void {
-    if (!this.world) {
-      console.error("[PhysicsWorld] World not initialized");
-      return;
-    }
+    const { world, sharedBuffer } = this.ensureInitialized();
 
     // Create kinematic rigid body for player
     const bodyDesc =
@@ -179,28 +194,28 @@ class PhysicsWorld {
         transform.position.z,
       );
 
-    const body = this.world.createRigidBody(bodyDesc);
+    const body = world.createRigidBody(bodyDesc);
 
     // Create capsule collider for player
     const colliderDesc = RAPIER.ColliderDesc.capsule(
-      config.capsuleHeight / 2,
-      config.capsuleRadius,
+      controllerConfig.capsuleHeight / 2,
+      controllerConfig.capsuleRadius,
     );
-    const collider = this.world.createCollider(colliderDesc, body);
+    const collider = world.createCollider(colliderDesc, body);
 
     // Create character controller
-    this.characterController = this.world.createCharacterController(0.01);
+    this.characterController = world.createCharacterController(0.01);
     this.characterController.enableAutostep(
-      config.stepHeight,
-      config.stepHeight,
+      controllerConfig.stepHeight,
+      controllerConfig.stepHeight,
       true,
     );
     this.characterController.enableSnapToGround(0.5);
     this.characterController.setMaxSlopeClimbAngle(
-      (config.maxSlopeAngle * Math.PI) / 180,
+      (controllerConfig.maxSlopeAngle * Math.PI) / 180,
     );
     this.characterController.setMinSlopeSlideAngle(
-      (config.minSlopeSlideAngle * Math.PI) / 180,
+      (controllerConfig.minSlopeSlideAngle * Math.PI) / 180,
     );
 
     // Store references
@@ -209,14 +224,12 @@ class PhysicsWorld {
     this.playerId = id;
 
     // Get buffer index from shared buffer (already registered by main thread)
-    this.sharedBuffer.rebuildEntityMap();
-    const bufferIndex = this.sharedBuffer.getEntityIndex(id);
+    sharedBuffer.rebuildEntityMap();
+    const bufferIndex = sharedBuffer.getEntityIndex(id);
     this.entityIndices.set(id, bufferIndex);
 
     // Initialize rotation from transform
     this.playerRotationY = this.quaternionToYRotation(transform.rotation);
-
-    console.log("[PhysicsWorld] Spawned player:", id);
   }
 
   private quaternionToYRotation(q: {
@@ -284,7 +297,8 @@ class PhysicsWorld {
   }
 
   private step = (): void => {
-    if (!this.running || !this.world) return;
+    if (!this.running || !this.world || !this.sharedBuffer || !this.eventQueue)
+      return;
 
     const now = performance.now();
     const deltaMs = now - this.lastTime;
@@ -296,7 +310,7 @@ class PhysicsWorld {
     this.updatePlayer(deltaSeconds);
 
     // Step the physics world
-    this.world.step(this.eventQueue!);
+    this.world.step(this.eventQueue);
 
     // Write transforms to SharedArrayBuffer
     this.writeTransformsToSharedBuffer();
@@ -374,6 +388,8 @@ class PhysicsWorld {
   }
 
   private writeTransformsToSharedBuffer(): void {
+    if (!this.sharedBuffer) return;
+
     for (const [id, body] of this.bodies) {
       const bufferIndex = this.entityIndices.get(id);
       if (bufferIndex === undefined || bufferIndex < 0) continue;
@@ -401,6 +417,8 @@ class PhysicsWorld {
     this.characterController = null;
     this.world = null;
     this.eventQueue = null;
+    this.sharedBuffer = null;
+    this.initialized = false;
   }
 }
 
@@ -443,12 +461,12 @@ export function createPhysicsApi(): PhysicsApi {
     async spawnPlayer(
       id: EntityId,
       transform: Transform,
-      config: CharacterControllerConfig,
+      controllerConfig: CharacterControllerConfig,
     ): Promise<void> {
       if (!physicsWorld) {
         throw new Error("Physics world not initialized");
       }
-      physicsWorld.spawnPlayer(id, transform, config);
+      physicsWorld.spawnPlayer(id, transform, controllerConfig);
     },
 
     removeEntity(id: EntityId): void {

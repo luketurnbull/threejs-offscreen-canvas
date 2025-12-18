@@ -17,6 +17,8 @@ export default class App {
   private bridge: WorkerBridge;
 
   private resizeObserver: ResizeObserver | null = null;
+  private pixelRatioMediaQuery: MediaQueryList | null = null;
+  private pixelRatioHandler: (() => void) | null = null;
   private _initialized = false;
 
   constructor() {
@@ -26,6 +28,14 @@ export default class App {
         "Your browser doesn't support OffscreenCanvas. Please use a modern browser.",
       );
       throw new Error("OffscreenCanvas not supported");
+    }
+
+    // Check for SharedArrayBuffer support (requires cross-origin isolation)
+    if (typeof SharedArrayBuffer === "undefined") {
+      this.showError(
+        "SharedArrayBuffer is not available. This may be due to missing cross-origin isolation headers (COOP/COEP).",
+      );
+      throw new Error("SharedArrayBuffer not supported");
     }
 
     // Initialize managers
@@ -48,7 +58,6 @@ export default class App {
       await this.initWorkers();
       this.setupEventListeners();
       this._initialized = true;
-      console.log("App initialized successfully");
     } catch (error) {
       console.error("Failed to initialize app:", error);
       this.showError("Failed to initialize application");
@@ -105,20 +114,37 @@ export default class App {
   }
 
   private setupPixelRatioListener(): void {
-    const updatePixelRatio = (): void => {
+    // Create handler that can be removed on dispose
+    this.pixelRatioHandler = (): void => {
       this.handleResize();
-
-      // Re-register for next change
-      matchMedia(
-        `(resolution: ${window.devicePixelRatio}dppx)`,
-      ).addEventListener("change", updatePixelRatio, { once: true });
+      // Re-register for next change with new media query
+      this.updatePixelRatioMediaQuery();
     };
 
-    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener(
-      "change",
-      updatePixelRatio,
-      { once: true },
+    this.updatePixelRatioMediaQuery();
+  }
+
+  private updatePixelRatioMediaQuery(): void {
+    // Remove previous listener if exists
+    if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
+      this.pixelRatioMediaQuery.removeEventListener(
+        "change",
+        this.pixelRatioHandler,
+      );
+    }
+
+    // Create new media query for current pixel ratio
+    this.pixelRatioMediaQuery = matchMedia(
+      `(resolution: ${window.devicePixelRatio}dppx)`,
     );
+
+    if (this.pixelRatioHandler) {
+      this.pixelRatioMediaQuery.addEventListener(
+        "change",
+        this.pixelRatioHandler,
+        { once: true },
+      );
+    }
   }
 
   private handleResize(): void {
@@ -131,14 +157,12 @@ export default class App {
     this.bridge.resize(viewport);
   }
 
-  private handleLoadProgress(progress: number): void {
-    console.log(`Loading: ${Math.round(progress * 100)}%`);
-    // TODO: Update loading UI
+  private handleLoadProgress(_progress: number): void {
+    // Loading progress can be used for UI updates
+    // Currently handled silently - add loading UI here if needed
   }
 
   private async handleLoadComplete(): Promise<void> {
-    console.log("Loading complete");
-
     // Fetch and register debug bindings now that world is loaded
     const renderApi = this.bridge.getRenderApi();
     if (this.debug.active && renderApi) {
@@ -206,6 +230,16 @@ export default class App {
   }
 
   dispose(): void {
+    // Clean up pixel ratio listener
+    if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
+      this.pixelRatioMediaQuery.removeEventListener(
+        "change",
+        this.pixelRatioHandler,
+      );
+    }
+    this.pixelRatioMediaQuery = null;
+    this.pixelRatioHandler = null;
+
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.debug.dispose();

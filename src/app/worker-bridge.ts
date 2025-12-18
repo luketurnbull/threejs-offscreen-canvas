@@ -13,6 +13,7 @@ import {
   SharedTransformBuffer,
   isSharedArrayBufferSupported,
 } from "~/shared/buffers/transform-buffer";
+import { config } from "~/shared/config";
 
 export interface WorkerBridgeCallbacks {
   onProgress?: (progress: number) => void;
@@ -116,8 +117,6 @@ export default class WorkerBridge {
         ? Comlink.proxy(callbacks.onFrameTiming)
         : undefined,
     );
-
-    console.log("[WorkerBridge] Render worker initialized");
   }
 
   private async initPhysicsWorker(sharedBuffers: {
@@ -132,9 +131,7 @@ export default class WorkerBridge {
 
     this.physicsApi = Comlink.wrap<PhysicsApi>(this.physicsWorker);
 
-    await this.physicsApi.init({ x: 0, y: -20, z: 0 }, sharedBuffers);
-
-    console.log("[WorkerBridge] Physics worker initialized");
+    await this.physicsApi.init(config.physics.gravity, sharedBuffers);
   }
 
   private startPhysics(): void {
@@ -142,10 +139,6 @@ export default class WorkerBridge {
 
     // Start physics simulation - transforms are written directly to SharedArrayBuffer
     this.physicsApi.start();
-
-    console.log(
-      "[WorkerBridge] Physics simulation started (SharedArrayBuffer sync)",
-    );
   }
 
   private async spawnWorld(): Promise<void> {
@@ -154,7 +147,7 @@ export default class WorkerBridge {
     // Create ground plane (static physics body)
     const groundId = createEntityId();
     const groundTransform: Transform = {
-      position: { x: 0, y: -0.5, z: 0 },
+      position: config.ground.position,
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
@@ -167,7 +160,7 @@ export default class WorkerBridge {
       {
         type: "static",
         colliderType: "cuboid",
-        dimensions: { x: 100, y: 1, z: 100 },
+        dimensions: config.ground.dimensions,
         friction: 0.8,
       },
     );
@@ -175,7 +168,7 @@ export default class WorkerBridge {
     // Create player (character controller)
     this.playerId = createEntityId();
     const playerTransform: Transform = {
-      position: { x: 0, y: 1, z: 0 },
+      position: { x: 0, y: 2, z: 0 },
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
@@ -184,18 +177,16 @@ export default class WorkerBridge {
     this.sharedBuffer.registerEntity(this.playerId);
 
     await this.physicsApi.spawnPlayer(this.playerId, playerTransform, {
-      capsuleRadius: 0.3,
-      capsuleHeight: 1.0,
-      stepHeight: 0.3,
-      maxSlopeAngle: 45,
-      minSlopeSlideAngle: 30,
+      capsuleRadius: config.characterController.capsuleRadius,
+      capsuleHeight: config.characterController.capsuleHeight,
+      stepHeight: config.characterController.stepHeight,
+      maxSlopeAngle: config.characterController.maxSlopeAngle,
+      minSlopeSlideAngle: config.characterController.minSlopeSlideAngle,
     });
 
     // Spawn render entities for ground and player
     await this.renderApi.spawnEntity(groundId, "ground");
     await this.renderApi.spawnEntity(this.playerId, "player");
-
-    console.log("[WorkerBridge] World spawned");
   }
 
   resize(viewport: ViewportSize): void {

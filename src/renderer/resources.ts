@@ -13,6 +13,10 @@ type ResourcesEvents = {
   ready: {
     itemsLoaded: number;
   };
+  error: {
+    source: string;
+    error: Error;
+  };
 };
 
 /**
@@ -20,6 +24,13 @@ type ResourcesEvents = {
  *
  * Uses fetch + createImageBitmap for textures (no DOM dependency).
  * GLTFLoader works natively in workers.
+ *
+ * Note on ImageBitmap usage:
+ * Three.js CanvasTexture and CubeTexture accept ImageBitmap as valid image sources
+ * since r128+. The type definitions are overly strict, so we use type assertions.
+ * This is safe because ImageBitmap implements the TexImageSource interface.
+ *
+ * @see https://threejs.org/docs/#api/en/textures/Texture
  */
 export default class Resources extends EventEmitter<ResourcesEvents> {
   items: Record<string, ResourceItem>;
@@ -77,18 +88,28 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
 
     try {
       const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       const blob = await response.blob();
       const imageBitmap = await createImageBitmap(blob, {
         imageOrientation: "flipY",
       });
 
+      // ImageBitmap is a valid TexImageSource for Three.js textures (r128+)
+      // Type assertion needed due to overly strict Three.js type definitions
       const texture = new THREE.CanvasTexture(
-        imageBitmap as unknown as HTMLCanvasElement,
+        imageBitmap as unknown as OffscreenCanvas,
       );
       texture.needsUpdate = true;
       this.sourceLoaded(source, texture);
     } catch (error) {
       console.error(`Failed to load texture: ${path}`, error);
+      this.emit("error", {
+        source: source.name,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      // Provide fallback texture to prevent rendering errors
       this.sourceLoaded(source, new THREE.Texture());
     }
   }
@@ -100,11 +121,16 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
       const imageBitmaps = await Promise.all(
         paths.map(async (path) => {
           const response = await fetch(path);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           const blob = await response.blob();
           return createImageBitmap(blob);
         }),
       );
 
+      // ImageBitmap array is valid for CubeTexture (r128+)
+      // Type assertion needed due to overly strict Three.js type definitions
       const cubeTexture = new THREE.CubeTexture(
         imageBitmaps as unknown as HTMLImageElement[],
       );
@@ -112,6 +138,11 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
       this.sourceLoaded(source, cubeTexture);
     } catch (error) {
       console.error(`Failed to load cube texture: ${source.name}`, error);
+      this.emit("error", {
+        source: source.name,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      // Provide fallback texture to prevent rendering errors
       this.sourceLoaded(source, new THREE.CubeTexture());
     }
   }
@@ -127,6 +158,13 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
       undefined,
       (error) => {
         console.error(`Failed to load GLTF: ${path}`, error);
+        this.emit("error", {
+          source: source.name,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+        // Still count as loaded to prevent hanging, but with null value
+        // Consumers should check for null/undefined models
+        this.sourceLoaded(source, null as unknown as ResourceItem);
       },
     );
   }
@@ -149,5 +187,16 @@ export default class Resources extends EventEmitter<ResourcesEvents> {
         itemsLoaded: this.loaded,
       });
     }
+  }
+
+  /**
+   * Dispose of the loader resources
+   */
+  dispose(): void {
+    // GLTFLoader doesn't have a dispose method, but we can clear references
+    // Clear items to allow garbage collection of loaded resources
+    // Note: Actual Three.js objects (textures, geometries) should be disposed
+    // by their consuming components
+    this.items = {};
   }
 }

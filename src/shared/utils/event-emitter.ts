@@ -14,7 +14,8 @@ export default class EventEmitter<TEvents extends object> {
       this.listeners.set(event, new Set());
     }
 
-    this.listeners?.get(event)?.add(callback as Callback<unknown>);
+    // We just ensured the key exists above, so get() will not return undefined
+    this.listeners.get(event)!.add(callback as Callback<unknown>);
 
     // Return unsubscribe function
     return () => this.off(event, callback);

@@ -20,7 +20,7 @@ Multi-worker architecture for high-performance 3D rendering with physics simulat
 ┌───────────────┐  ┌─────────┐  ┌───────────────┐
 │PHYSICS WORKER │  │ Shared  │  │ RENDER WORKER │
 │               │  │ Array   │  │               │
-│  PhysicsWorld │──│ Buffer  │──│   Renderer    │
+│  PhysicsWorld │──│ Buffer  │──│  Experience   │
 │   (Rapier)    │  │         │  │  (Three.js)   │
 │               │  └─────────┘  │               │
 │   60Hz fixed  │               │  ~60Hz (rAF)  │
@@ -34,9 +34,20 @@ Multi-worker architecture for high-performance 3D rendering with physics simulat
 Worker files contain only Comlink API exposure. All logic lives in domain modules.
 
 ```typescript
-// workers/render.worker.ts - THIN
+// workers/render.worker.ts - Contains API factory
 import * as Comlink from "comlink";
-import { createRenderApi } from "../renderer";
+import Experience from "../renderer";
+
+function createRenderApi(): RenderApi {
+  let experience: Experience | null = null;
+  return {
+    async init(canvas, viewport, debug, sharedBuffers) {
+      experience = new Experience(canvas, viewport, debug, sharedBuffer);
+    },
+    // ... delegate methods to experience
+  };
+}
+
 Comlink.expose(createRenderApi());
 ```
 
@@ -52,30 +63,50 @@ Code is organized by **what it does**, not where it runs:
 | `shared/` | Cross-worker contracts |
 | `workers/` | Thin entry points only |
 
-### 3. Flat Structure
+### 3. Experience/World/Renderer Pattern
 
-Each domain folder is flat with ~10 files. No deep nesting.
+Inspired by Bruno Simon's Three.js Journey architecture, using dependency injection instead of singletons:
 
 ```
-renderer/
-  index.ts          # Main orchestrator
-  time.ts           # Animation loop
-  resources.ts      # Asset loading
-  camera.ts         # Camera controls
-  floor.ts          # Scene object
-  fox.ts            # Scene object
-  plane.ts          # Scene object
-  plane.vert        # Co-located shader
-  plane.frag        # Co-located shader
-  environment.ts    # Lighting setup
+Experience (orchestrator)
+    │
+    ├── Renderer (WebGLRenderer wrapper)
+    ├── Camera (PerspectiveCamera + follow behavior)
+    ├── World (entities + scene objects)
+    │     ├── EntityFactory
+    │     ├── Floor, PlaneShader, Environment
+    │     └── Entities (player, ground, etc.)
+    ├── TransformSync (physics interpolation)
+    ├── Time, Debug, Resources, InputState
+    └── THREE.Scene
 ```
 
-### 4. Explicit Contracts
+Each class has a single responsibility:
 
-`shared/` contains only what crosses worker boundaries:
-- Type definitions (APIs, entities)
-- SharedArrayBuffer wrappers
-- EventEmitter base class
+| Class | File | Responsibility |
+|-------|------|----------------|
+| Experience | `index.ts` | Entry point, orchestrator, update loop |
+| Renderer | `renderer.ts` | WebGLRenderer config/render/resize |
+| Camera | `camera.ts` | PerspectiveCamera + third-person follow |
+| World | `world.ts` | Entity + scene object management |
+| TransformSync | `transform-sync.ts` | Physics-to-render interpolation |
+
+### 4. Centralized Configuration
+
+All configuration lives in `src/shared/config.ts`:
+
+```typescript
+export const config = {
+  renderer: { clearColor, toneMappingExposure, maxPixelRatio },
+  camera: { fov, near, far, position, follow: { distance, height, damping } },
+  shadows: { enabled, mapSize },
+  physics: { gravity, interval },
+  player: { moveSpeed, sprintMultiplier, turnSpeed },
+  characterController: { capsuleRadius, capsuleHeight, stepHeight, ... },
+  ground: { dimensions, position },
+  entities: { maxCount },
+};
+```
 
 ## Project Structure
 
@@ -91,21 +122,29 @@ src/
     debug-manager.ts          # Tweakpane & Stats.js UI
     
   renderer/                   # Three.js domain (runs in worker)
-    index.ts                  # RenderExperience class
+    index.ts                  # Experience class (orchestrator)
+    renderer.ts               # Renderer class (WebGLRenderer wrapper)
+    camera.ts                 # Camera class (PerspectiveCamera + follow)
+    world.ts                  # World class (entities + scene objects)
+    transform-sync.ts         # TransformSync (physics interpolation)
     time.ts                   # requestAnimationFrame loop
     resources.ts              # Asset loading (fetch + createImageBitmap)
     debug.ts                  # Debug bindings for worker
-    camera.ts                 # FollowCamera controller
     input-state.ts            # Input state tracking
-    config.ts                 # Renderer configuration
     sources.ts                # Asset definitions
-    floor.ts                  # Ground plane
-    fox.ts                    # Animated character
-    plane.ts                  # Shader plane
-    plane.vert                # Vertex shader
-    plane.frag                # Fragment shader
     environment.ts            # Lighting & environment map
-    
+    entities/                 # Entity component system
+      types.ts                # RenderComponent, EntityContext interfaces
+      index.ts                # EntityFactory + EntityRegistry
+      components/
+        player.ts             # PlayerEntity (fox + animations)
+        ground.ts             # GroundEntity (invisible physics proxy)
+        static-mesh.ts        # Generic fallback entity
+    objects/                  # Pure visual components (no entity logic)
+      fox.ts                  # Animated character model
+      floor.ts                # Ground plane mesh
+      plane.ts                # Shader plane
+      
   physics/                    # Rapier domain (runs in worker)
     index.ts                  # PhysicsWorld class
     
@@ -114,6 +153,7 @@ src/
     physics.worker.ts         # Comlink.expose(physicsApi)
     
   shared/                     # Cross-worker contracts
+    config.ts                 # Centralized configuration
     types/
       index.ts                # Re-exports
       entity.ts               # EntityId, Transform, EntitySpawnData
@@ -166,7 +206,7 @@ const sharedBuffer = new SharedTransformBuffer();
 const buffers = sharedBuffer.getBuffers();
 
 // 4. Initialize workers (order matters: physics before render)
-await physicsApi.init(gravity, buffers);
+await physicsApi.init(config.physics.gravity, buffers);
 await renderApi.init(canvas, viewport, debug, buffers);
 
 // 5. Start simulation
@@ -225,6 +265,8 @@ physicsApi.start();
 
 ## Entity System
 
+> **See also**: [entities.md](./entities.md) for detailed entity component documentation.
+
 ### EntityId
 
 Branded type for type-safe entity identification:
@@ -237,6 +279,35 @@ type EntityId = number & { readonly __brand: "EntityId" };
 const id = createEntityId();  // Returns 1, 2, 3, ...
 ```
 
+### Entity Component Pattern
+
+The World class uses a factory + registry pattern for extensible entity types:
+
+```typescript
+// Register entity types (once at startup)
+entityRegistry.register("player", createPlayerEntity);
+entityRegistry.register("ground", createGroundEntity);
+
+// Create entities via factory
+const entity = await entityFactory.create(id, "player", data);
+```
+
+All entities implement the `RenderComponent` interface with lifecycle hooks:
+
+```typescript
+interface RenderComponent {
+  readonly id: EntityId;
+  readonly type: string;
+  readonly object: THREE.Object3D;
+  readonly mixer?: THREE.AnimationMixer;
+  
+  onTransformUpdate?(pos: Vector3, quat: Quaternion): void;
+  onPhysicsFrame?(inputState: InputState): void;
+  onRenderFrame?(delta: number, elapsed: number): void;
+  dispose(): void;
+}
+```
+
 ### Entity Lifecycle
 
 ```
@@ -244,44 +315,53 @@ const id = createEntityId();  // Returns 1, 2, 3, ...
               │                         │                       │
               │                         │                       │
     createEntityId()                    │                       │
+    registerEntity(id)                  │                       │
               │                         │                       │
               ├──── spawnEntity() ─────▶│                       │
               │                         │ Create RigidBody      │
-              │                         │ Register in buffer    │
+              │                         │ rebuildEntityMap()    │
               │                         │                       │
               ├──── spawnEntity() ─────────────────────────────▶│
-              │                         │                 Create Mesh
-              │                         │                 Register in buffer
+              │                         │              EntityFactory.create()
+              │                         │              rebuildEntityMap()
               │                         │                       │
               │                         │                       │
               │         [Physics Loop]  │                       │
               │                         │ Step simulation       │
               │                         │ Write transforms ────▶│ Read transforms
+              │                         │ Write timing ────────▶│ Calculate alpha
               │                         │ Signal frame ────────▶│ Interpolate
+              │                         │                       │ Call lifecycle hooks
               │                         │                       │ Render
               │                         │                       │
 ```
 
 ### Transform Synchronization
 
-Physics worker writes, Render worker reads:
+Physics worker writes, Render worker reads (via TransformSync):
 
 ```typescript
-// Physics: Write each entity's transform
+// Physics: Write each entity's transform (shifts current→previous)
 sharedBuffer.writeTransform(index, posX, posY, posZ, rotX, rotY, rotZ, rotW);
+
+// Physics: Write timing for interpolation
+sharedBuffer.writeFrameTiming(performance.now(), PHYSICS_INTERVAL);
 
 // Physics: Signal frame complete (atomic increment)
 sharedBuffer.signalFrameComplete();
 
-// Render: Check for new frame
-const newFrame = sharedBuffer.getFrameCounter() !== lastFrame;
+// Render (TransformSync): Read timing and calculate interpolation alpha
+const timing = sharedBuffer.readFrameTiming();
+const alpha = (now - timing.currentTime) / timing.interval;
 
-// Render: Read and interpolate
-const transform = sharedBuffer.readTransform(index);
-mesh.position.lerp(targetPosition, alpha);
+// Render (TransformSync): Read and interpolate between previous and current
+const transforms = sharedBuffer.readTransform(index);
+position.lerpVectors(transforms.previous, transforms.current, alpha);
 ```
 
 ## SharedArrayBuffer
+
+> **See also**: [interpolation.md](./interpolation.md) for timestamp-based interpolation details.
 
 ### Memory Layout
 
@@ -293,13 +373,23 @@ Control Buffer (Int32Array):
 └────────────────┴─────────────┴────────────┴────────────┴─────┘
      Index 0          Index 1      Index 2      Index 3
 
-Transform Buffer (Float32Array):
-┌─────────────────────────────────────┬─────────────────────────────────────┐
-│           Entity 0                  │           Entity 1                  │
-│ posX posY posZ rotX rotY rotZ rotW  │ posX posY posZ rotX rotY rotZ rotW  │
-└─────────────────────────────────────┴─────────────────────────────────────┘
-  0    1    2    3    4    5    6       7    8    9   10   11   12   13
+Timing Buffer (Float64Array):
+┌─────────────────────┬─────────────────────┬──────────────────┐
+│ Current Frame Time  │ Previous Frame Time │ Physics Interval │
+└─────────────────────┴─────────────────────┴──────────────────┘
+        Index 0              Index 1              Index 2
+
+Transform Buffer (Float32Array) - 14 floats per entity:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Entity 0 CURRENT:  posX posY posZ rotX rotY rotZ rotW  (indices 0-6)        │
+│ Entity 0 PREVIOUS: posX posY posZ rotX rotY rotZ rotW  (indices 7-13)       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Entity 1 CURRENT:  posX posY posZ rotX rotY rotZ rotW  (indices 14-20)      │
+│ Entity 1 PREVIOUS: posX posY posZ rotX rotY rotZ rotW  (indices 21-27)      │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The double-buffered transforms (previous + current) enable smooth interpolation between physics frames.
 
 ### Synchronization
 
@@ -328,6 +418,29 @@ server: {
     "Cross-Origin-Embedder-Policy": "require-corp",
   },
 },
+```
+
+## Update Loop Flow
+
+```
+Experience.update(delta, elapsed)
+│
+├─→ TransformSync.update(entities)
+│   ├─ Read timing from SharedArrayBuffer
+│   ├─ Calculate interpolation alpha
+│   ├─ Apply interpolated transforms to each entity
+│   └─ Return: newPhysicsFrame boolean
+│
+├─→ World.update(delta, elapsed, newPhysicsFrame)
+│   ├─ For each entity:
+│   │   ├─ mixer?.update(deltaSeconds)
+│   │   ├─ onRenderFrame?.(delta, elapsed)
+│   │   └─ if newPhysicsFrame: onPhysicsFrame?.(inputState)
+│
+├─→ Camera.update()
+│   └─ Follow target with damped movement
+│
+└─→ Renderer.render(scene, camera)
 ```
 
 ## Type Safety

@@ -123,13 +123,18 @@ export class SharedTransformBuffer {
   /**
    * Register an entity and get its slot index
    * Called when spawning entities
+   *
+   * @param id - The entity ID to register
+   * @returns The buffer index for this entity, or throws if max entities exceeded
+   * @throws Error if maximum entity count is reached
    */
   registerEntity(id: EntityId): number {
     const currentCount = Atomics.load(this.controlView, ENTITY_COUNT_INDEX);
 
     if (currentCount >= MAX_ENTITIES) {
-      console.error("[SharedTransformBuffer] Max entities exceeded");
-      return -1;
+      throw new Error(
+        `Maximum entity count (${MAX_ENTITIES}) exceeded. Cannot register entity ${id}.`,
+      );
     }
 
     const index = currentCount;
