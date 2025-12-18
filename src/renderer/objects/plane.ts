@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import type Debug from "./debug";
-import type { DebugFolder } from "./debug";
-import type Time from "./time";
+import type Debug from "../debug";
+import type { DebugFolder } from "../debug";
+import type Time from "../time";
 import vertexShader from "./plane.vert";
 import fragmentShader from "./plane.frag";
 
-export class PlaneShader {
+export default class PlaneShader {
   private scene: THREE.Scene;
   private mesh: THREE.Mesh;
   private material: THREE.RawShaderMaterial;

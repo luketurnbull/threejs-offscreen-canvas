@@ -17,9 +17,9 @@ import Resources from "./resources";
 import sources from "./sources";
 
 // Scene objects
-import Floor from "./floor";
-import Fox from "./fox";
-import { PlaneShader } from "./plane";
+import Floor from "./objects/floor";
+import Fox from "./objects/fox";
+import PlaneShader from "./objects/plane";
 import Environment from "./environment";
 
 /**
