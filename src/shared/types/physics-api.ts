@@ -42,13 +42,24 @@ export interface MovementInput {
 }
 
 /**
+ * Shared buffer references for zero-copy transform sync
+ */
+export interface SharedBuffers {
+  control: SharedArrayBuffer;
+  transform: SharedArrayBuffer;
+}
+
+/**
  * Physics Worker API
  */
 export interface PhysicsApi {
   /**
-   * Initialize the physics world
+   * Initialize the physics world with shared buffers for transform sync
    */
-  init(gravity?: { x: number; y: number; z: number }): Promise<void>;
+  init(
+    gravity: { x: number; y: number; z: number },
+    sharedBuffers: SharedBuffers,
+  ): Promise<void>;
 
   /**
    * Spawn an entity with physics body
@@ -79,9 +90,9 @@ export interface PhysicsApi {
 
   /**
    * Start the physics simulation loop
-   * @param onUpdate Callback with transform updates each step
+   * Transforms are written directly to SharedArrayBuffer
    */
-  start(onUpdate: (updates: TransformUpdateBatch) => void): void;
+  start(): void;
 
   /**
    * Pause the physics simulation
@@ -97,16 +108,4 @@ export interface PhysicsApi {
    * Clean up and dispose
    */
   dispose(): void;
-}
-
-/**
- * Transform update batch sent from physics to render
- */
-export interface TransformUpdateBatch {
-  timestamp: number;
-  updates: Array<{
-    id: EntityId;
-    position: { x: number; y: number; z: number };
-    rotation: { x: number; y: number; z: number; w: number };
-  }>;
 }

@@ -4,6 +4,19 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [glsl()],
+  server: {
+    headers: {
+      // Required for SharedArrayBuffer
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
+  preview: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
   worker: {
     format: "es",
     plugins: () => [glsl()],
@@ -15,9 +28,6 @@ export default defineConfig({
       "~/shared": fileURLToPath(new URL("./src/shared", import.meta.url)),
       "~/utils": fileURLToPath(new URL("./src/utils", import.meta.url)),
       "~/constants": fileURLToPath(new URL("./src/constants", import.meta.url)),
-      "~/experience": fileURLToPath(
-        new URL("./src/experience", import.meta.url),
-      ),
       "~/shaders": fileURLToPath(new URL("./src/shaders", import.meta.url)),
     },
   },

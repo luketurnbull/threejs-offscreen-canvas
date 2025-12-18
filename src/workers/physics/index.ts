@@ -6,26 +6,34 @@ import type {
   PhysicsBodyConfig,
   CharacterControllerConfig,
   MovementInput,
-  TransformUpdateBatch,
   EntitySpawnData,
+  SharedBuffers,
 } from "~/shared/types";
+import { SharedTransformBuffer } from "~/shared/buffers";
 import PhysicsWorld from "./physics-world";
 
 /**
  * Physics Worker Entry Point
  *
  * Exposes PhysicsApi via Comlink for communication with main thread.
- * Manages Rapier physics simulation and sends transform updates.
+ * Manages Rapier physics simulation and writes transforms to SharedArrayBuffer.
  */
 
 let physicsWorld: PhysicsWorld | null = null;
+let sharedBuffer: SharedTransformBuffer | null = null;
 
 const api: PhysicsApi = {
   async init(
-    gravity: { x: number; y: number; z: number } = { x: 0, y: -9.81, z: 0 },
+    gravity: { x: number; y: number; z: number },
+    sharedBuffers: SharedBuffers,
   ): Promise<void> {
+    sharedBuffer = new SharedTransformBuffer(
+      sharedBuffers.control,
+      sharedBuffers.transform,
+    );
+
     physicsWorld = new PhysicsWorld();
-    await physicsWorld.init(gravity);
+    await physicsWorld.init(gravity, sharedBuffer);
   },
 
   async spawnEntity(
@@ -57,11 +65,11 @@ const api: PhysicsApi = {
     physicsWorld?.setPlayerInput(input);
   },
 
-  start(onUpdate: (updates: TransformUpdateBatch) => void): void {
+  start(): void {
     if (!physicsWorld) {
       throw new Error("Physics world not initialized");
     }
-    physicsWorld.start(onUpdate);
+    physicsWorld.start();
   },
 
   pause(): void {

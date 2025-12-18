@@ -6,25 +6,34 @@ import type {
   DebugBinding,
   DebugUpdateEvent,
   EntityId,
-  TransformUpdateBatch,
+  SharedBuffers,
 } from "~/shared/types";
+import { SharedTransformBuffer } from "~/shared/buffers";
 import RenderExperience from "./experience";
 
 let experience: RenderExperience | null = null;
+let sharedBuffer: SharedTransformBuffer | null = null;
 
 const api: RenderApi = {
   async init(
     canvas: OffscreenCanvas,
     viewport: ViewportSize,
     debug: boolean,
+    sharedBuffers: SharedBuffers,
     onProgress?: (progress: number) => void,
     onReady?: () => void,
     onFrameTiming?: (deltaMs: number) => void,
   ): Promise<void> {
+    sharedBuffer = new SharedTransformBuffer(
+      sharedBuffers.control,
+      sharedBuffers.transform,
+    );
+
     experience = new RenderExperience(
       canvas,
       viewport,
       debug,
+      sharedBuffer,
       onProgress,
       onReady,
       onFrameTiming,
@@ -62,10 +71,6 @@ const api: RenderApi = {
 
   removeEntity(id: EntityId): void {
     experience?.removeEntity(id);
-  },
-
-  applyTransformUpdates(updates: TransformUpdateBatch): void {
-    experience?.applyTransformUpdates(updates);
   },
 
   async getPlayerEntityId(): Promise<EntityId | null> {

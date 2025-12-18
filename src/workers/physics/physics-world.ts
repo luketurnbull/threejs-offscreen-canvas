@@ -5,14 +5,14 @@ import type {
   PhysicsBodyConfig,
   CharacterControllerConfig,
   MovementInput,
-  TransformUpdateBatch,
 } from "~/shared/types";
+import { SharedTransformBuffer } from "~/shared/buffers";
 
 /**
  * PhysicsWorld - Rapier physics simulation in worker context
  *
  * Manages physics bodies, character controller, and simulation stepping.
- * Sends transform updates to render worker each step.
+ * Writes transforms to SharedArrayBuffer for zero-copy sync with Render Worker.
  */
 export default class PhysicsWorld {
   private world: RAPIER.World | null = null;
@@ -21,6 +21,10 @@ export default class PhysicsWorld {
   // Entity management
   private bodies: Map<EntityId, RAPIER.RigidBody> = new Map();
   private colliders: Map<EntityId, RAPIER.Collider> = new Map();
+  private entityIndices: Map<EntityId, number> = new Map(); // Maps entity ID to buffer index
+
+  // Shared buffer for transform sync (required)
+  private sharedBuffer!: SharedTransformBuffer;
 
   // Character controller
   private characterController: RAPIER.KinematicCharacterController | null =
@@ -45,11 +49,13 @@ export default class PhysicsWorld {
   // Simulation loop
   private running = false;
   private lastTime = 0;
-  private onUpdate: ((updates: TransformUpdateBatch) => void) | null = null;
 
   async init(
-    gravity: { x: number; y: number; z: number } = { x: 0, y: -9.81, z: 0 },
+    gravity: { x: number; y: number; z: number },
+    sharedBuffer: SharedTransformBuffer,
   ): Promise<void> {
+    this.sharedBuffer = sharedBuffer;
+
     // Initialize Rapier WASM
     await RAPIER.init();
 
@@ -143,6 +149,11 @@ export default class PhysicsWorld {
     this.bodies.set(entityId, body);
     this.colliders.set(entityId, collider);
 
+    // Get buffer index from shared buffer (already registered by main thread)
+    this.sharedBuffer.rebuildEntityMap();
+    const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
+    this.entityIndices.set(entityId, bufferIndex);
+
     console.log("[PhysicsWorld] Spawned entity:", entityId, config.type, {
       position: transform.position,
       dimensions: config.dimensions,
@@ -196,6 +207,11 @@ export default class PhysicsWorld {
     this.bodies.set(id, body);
     this.colliders.set(id, collider);
     this.playerId = id;
+
+    // Get buffer index from shared buffer (already registered by main thread)
+    this.sharedBuffer.rebuildEntityMap();
+    const bufferIndex = this.sharedBuffer.getEntityIndex(id);
+    this.entityIndices.set(id, bufferIndex);
 
     // Initialize rotation from transform (extract Y rotation from quaternion)
     this.playerRotationY = this.quaternionToYRotation(transform.rotation);
@@ -251,8 +267,7 @@ export default class PhysicsWorld {
     this.playerInput = input;
   }
 
-  start(onUpdate: (updates: TransformUpdateBatch) => void): void {
-    this.onUpdate = onUpdate;
+  start(): void {
     this.running = true;
     this.lastTime = performance.now();
     this.step();
@@ -285,16 +300,9 @@ export default class PhysicsWorld {
     // Step the physics world
     this.world.step(this.eventQueue!);
 
-    // Collect transform updates
-    const updates = this.collectTransformUpdates();
-
-    // Send updates to render worker
-    if (this.onUpdate && updates.length > 0) {
-      this.onUpdate({
-        timestamp: now,
-        updates,
-      });
-    }
+    // Write transforms directly to SharedArrayBuffer (zero-copy)
+    this.writeTransformsToSharedBuffer();
+    this.sharedBuffer!.signalFrameComplete();
 
     // Schedule next step
     setTimeout(this.step, 1000 / 60); // 60 Hz physics
@@ -350,19 +358,6 @@ export default class PhysicsWorld {
     const correctedMovement = this.characterController.computedMovement();
     const currentPos = body.translation();
 
-    // Debug: log occasionally
-    const isGrounded = this.characterController.computedGrounded();
-    const numCollisions = this.characterController.numComputedCollisions();
-    if (Math.random() < 0.01) {
-      console.log("[PhysicsWorld] Player update:", {
-        desiredY: desiredMovement.y,
-        correctedY: correctedMovement.y,
-        isGrounded,
-        numCollisions,
-        currentY: currentPos.y,
-      });
-    }
-
     // Apply movement to kinematic body
     body.setNextKinematicTranslation({
       x: currentPos.x + correctedMovement.x,
@@ -376,26 +371,33 @@ export default class PhysicsWorld {
     );
   }
 
-  private collectTransformUpdates(): TransformUpdateBatch["updates"] {
-    const updates: TransformUpdateBatch["updates"] = [];
-
+  /**
+   * Write all entity transforms directly to SharedArrayBuffer
+   * Zero-copy sync with Render Worker
+   */
+  private writeTransformsToSharedBuffer(): void {
     for (const [id, body] of this.bodies) {
+      const bufferIndex = this.entityIndices.get(id);
+      if (bufferIndex === undefined || bufferIndex < 0) continue;
+
       const pos = body.translation();
       const rot = body.rotation();
 
-      updates.push({
-        id,
-        position: { x: pos.x, y: pos.y, z: pos.z },
-        rotation: { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
-      });
+      this.sharedBuffer!.writeTransform(
+        bufferIndex,
+        pos.x,
+        pos.y,
+        pos.z,
+        rot.x,
+        rot.y,
+        rot.z,
+        rot.w,
+      );
     }
-
-    return updates;
   }
 
   dispose(): void {
     this.running = false;
-    this.onUpdate = null;
     this.bodies.clear();
     this.colliders.clear();
     this.characterController = null;

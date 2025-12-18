@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import type { FolderApi } from "tweakpane";
 import type Resources from "~/utils/resources";
 import type Debug from "~/utils/debug";
+import type { DebugFolder } from "~/utils/debug";
 
 export default class Environment {
   private scene: THREE.Scene;
-  private debugFolder: FolderApi | null = null;
+  private debugFolder: DebugFolder | null = null;
 
   sunLight: THREE.DirectionalLight;
   environmentMap: {

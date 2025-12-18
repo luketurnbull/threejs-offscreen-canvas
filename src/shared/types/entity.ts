@@ -36,20 +36,3 @@ export interface EntitySpawnData {
  * Known entity types
  */
 export type EntityType = "player" | "static" | "dynamic" | "kinematic";
-
-/**
- * Transform update sent from Physics to Render worker
- */
-export interface TransformUpdate {
-  id: EntityId;
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number; w: number };
-}
-
-/**
- * Batch of transform updates (sent each physics step)
- */
-export interface TransformUpdateBatch {
-  timestamp: number;
-  updates: TransformUpdate[];
-}

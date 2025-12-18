@@ -22,7 +22,7 @@ export type {
   PhysicsBodyConfig,
   CharacterControllerConfig,
   MovementInput,
-  TransformUpdateBatch,
+  SharedBuffers,
 } from "./physics-api";
 
 // Entity System
@@ -31,6 +31,5 @@ export type {
   EntityType,
   EntitySpawnData,
   Transform,
-  TransformUpdate,
 } from "./entity";
 export { createEntityId } from "./entity";

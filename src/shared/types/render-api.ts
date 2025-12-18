@@ -4,7 +4,8 @@ import type {
   DebugBinding,
   DebugUpdateEvent,
 } from "./events";
-import type { EntityId, TransformUpdateBatch } from "./entity";
+import type { EntityId } from "./entity";
+import type { SharedBuffers } from "./physics-api";
 
 /**
  * Render Worker API - exposed via Comlink
@@ -19,6 +20,7 @@ export interface RenderApi {
     canvas: OffscreenCanvas,
     viewport: ViewportSize,
     debug: boolean,
+    sharedBuffers: SharedBuffers,
     onProgress?: (progress: number) => void,
     onReady?: () => void,
     onFrameTiming?: (deltaMs: number) => void,
@@ -66,11 +68,6 @@ export interface RenderApi {
    * Remove a render entity
    */
   removeEntity(id: EntityId): void;
-
-  /**
-   * Apply transform updates from physics worker
-   */
-  applyTransformUpdates(updates: TransformUpdateBatch): void;
 
   /**
    * Get the player entity ID (for camera following)

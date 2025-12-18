@@ -1,15 +1,15 @@
 import * as THREE from "three";
 import type Debug from "~/utils/debug";
+import type { DebugFolder } from "~/utils/debug";
 import type Time from "~/utils/time";
 import vertexShader from "./vertex.vert";
 import fragmentShader from "./fragment.frag";
-import type { FolderApi } from "tweakpane";
 
 export class PlaneShader {
   private scene: THREE.Scene;
   private mesh: THREE.Mesh;
   private material: THREE.RawShaderMaterial;
-  private debugFolder?: FolderApi;
+  private debugFolder?: DebugFolder;
   private unsubscribeTick: (() => void) | null = null;
 
   private uTime: THREE.Uniform<number> = new THREE.Uniform(0);

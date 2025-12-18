@@ -5,11 +5,14 @@ import type {
   ViewportSize,
   SerializedInputEvent,
   MovementInput,
-  TransformUpdateBatch,
   EntityId,
   Transform,
 } from "~/shared/types";
 import { createEntityId } from "~/shared/types";
+import {
+  SharedTransformBuffer,
+  isSharedArrayBufferSupported,
+} from "~/shared/buffers/transform-buffer";
 
 export interface WorkerBridgeCallbacks {
   onProgress?: (progress: number) => void;
@@ -33,6 +36,8 @@ export default class WorkerBridge {
   private renderApi: Comlink.Remote<RenderApi> | null = null;
   private physicsApi: Comlink.Remote<PhysicsApi> | null = null;
 
+  private sharedBuffer!: SharedTransformBuffer;
+
   private playerId: EntityId | null = null;
   private currentInput: MovementInput = {
     forward: false,
@@ -55,17 +60,29 @@ export default class WorkerBridge {
     debug: boolean,
     callbacks: WorkerBridgeCallbacks,
   ): Promise<void> {
-    // Initialize both workers in parallel
+    // SharedArrayBuffer is required - no fallback
+    if (!isSharedArrayBufferSupported()) {
+      throw new Error(
+        "SharedArrayBuffer is not supported. " +
+          "Please use a modern browser with cross-origin isolation enabled.",
+      );
+    }
+
+    // Create shared buffer for zero-copy transform sync
+    this.sharedBuffer = new SharedTransformBuffer();
+    const buffers = this.sharedBuffer.getBuffers();
+
+    // Initialize both workers in parallel with shared buffers
     await Promise.all([
-      this.initRenderWorker(canvas, viewport, debug, callbacks),
-      this.initPhysicsWorker(),
+      this.initRenderWorker(canvas, viewport, debug, callbacks, buffers),
+      this.initPhysicsWorker(buffers),
     ]);
 
     // Spawn initial entities BEFORE starting physics loop
     await this.spawnWorld();
 
-    // Set up physics → render transform sync (starts the physics loop)
-    this.setupTransformSync();
+    // Start physics simulation (transforms written directly to shared buffer)
+    this.startPhysics();
 
     this._initialized = true;
   }
@@ -75,6 +92,7 @@ export default class WorkerBridge {
     viewport: ViewportSize,
     debug: boolean,
     callbacks: WorkerBridgeCallbacks,
+    sharedBuffers: { control: SharedArrayBuffer; transform: SharedArrayBuffer },
   ): Promise<void> {
     this.renderWorker = new Worker(
       new URL("../workers/render/index.ts", import.meta.url),
@@ -87,6 +105,7 @@ export default class WorkerBridge {
       Comlink.transfer(canvas, [canvas]),
       viewport,
       debug,
+      sharedBuffers,
       callbacks.onProgress ? Comlink.proxy(callbacks.onProgress) : undefined,
       callbacks.onReady ? Comlink.proxy(callbacks.onReady) : undefined,
       callbacks.onFrameTiming
@@ -97,7 +116,10 @@ export default class WorkerBridge {
     console.log("[WorkerBridge] Render worker initialized");
   }
 
-  private async initPhysicsWorker(): Promise<void> {
+  private async initPhysicsWorker(sharedBuffers: {
+    control: SharedArrayBuffer;
+    transform: SharedArrayBuffer;
+  }): Promise<void> {
     this.physicsWorker = new Worker(
       new URL("../workers/physics/index.ts", import.meta.url),
       { type: "module" },
@@ -105,24 +127,20 @@ export default class WorkerBridge {
 
     this.physicsApi = Comlink.wrap<PhysicsApi>(this.physicsWorker);
 
-    await this.physicsApi.init({ x: 0, y: -20, z: 0 });
+    await this.physicsApi.init({ x: 0, y: -20, z: 0 }, sharedBuffers);
 
     console.log("[WorkerBridge] Physics worker initialized");
   }
 
-  private setupTransformSync(): void {
-    if (!this.physicsApi || !this.renderApi) return;
+  private startPhysics(): void {
+    if (!this.physicsApi) return;
 
-    // Start physics simulation with transform update callback
-    const renderApi = this.renderApi;
-    this.physicsApi.start(
-      Comlink.proxy((updates: TransformUpdateBatch) => {
-        // Forward transform updates from physics to render
-        renderApi.applyTransformUpdates(updates);
-      }),
+    // Start physics simulation - transforms are written directly to SharedArrayBuffer
+    this.physicsApi.start();
+
+    console.log(
+      "[WorkerBridge] Physics simulation started (SharedArrayBuffer sync)",
     );
-
-    console.log("[WorkerBridge] Transform sync established");
   }
 
   private async spawnWorld(): Promise<void> {
@@ -135,6 +153,9 @@ export default class WorkerBridge {
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
+
+    // Register ground in shared buffer (main thread is the source of truth for entity IDs)
+    this.sharedBuffer.registerEntity(groundId);
 
     await this.physicsApi.spawnEntity(
       { id: groundId, type: "static", transform: groundTransform },
@@ -153,6 +174,9 @@ export default class WorkerBridge {
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
+
+    // Register player in shared buffer
+    this.sharedBuffer.registerEntity(this.playerId);
 
     await this.physicsApi.spawnPlayer(this.playerId, playerTransform, {
       capsuleRadius: 0.3,

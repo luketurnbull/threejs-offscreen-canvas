@@ -5,23 +5,20 @@ import type {
   DebugBinding,
   DebugUpdateEvent,
   EntityId,
-  TransformUpdateBatch,
 } from "~/shared/types";
-import type TimeType from "~/utils/time";
-import type DebugType from "~/utils/debug";
-import type ResourcesType from "~/utils/resources";
-import Time from "./time";
-import Debug from "./debug";
-import Resources from "./resources";
+import { SharedTransformBuffer } from "~/shared/buffers";
+import Time from "~/utils/time";
+import Debug from "~/utils/debug";
+import Resources from "~/utils/resources";
 import InputState from "./input-state";
 import FollowCamera from "./controls/follow-camera";
 import sources from "~/constants/sources";
 
-// Entity components
-import Floor from "~/experience/world/objects/floor";
-import Fox from "~/experience/world/objects/fox";
-import { PlaneShader } from "~/experience/world/objects/plane";
-import Environment from "~/experience/world/systems/environment";
+// Scene objects
+import Floor from "./objects/floor";
+import Fox from "./objects/fox";
+import { PlaneShader } from "./objects/plane";
+import Environment from "./systems/environment";
 
 /**
  * Transform state for interpolation
@@ -67,6 +64,10 @@ export default class RenderExperience {
   private entities: Map<EntityId, RenderEntity> = new Map();
   private playerEntityId: EntityId | null = null;
 
+  // Shared buffer for transform sync (required)
+  private sharedBuffer: SharedTransformBuffer;
+  private lastPhysicsFrame = 0;
+
   // Legacy world objects (will be converted to entities)
   private floor: Floor | null = null;
   private fox: Fox | null = null;
@@ -82,10 +83,12 @@ export default class RenderExperience {
     canvas: OffscreenCanvas,
     viewport: ViewportSize,
     debug: boolean,
+    sharedBuffer: SharedTransformBuffer,
     onProgress?: (progress: number) => void,
     onReady?: () => void,
     onFrameTiming?: (deltaMs: number) => void,
   ) {
+    this.sharedBuffer = sharedBuffer;
     this.onProgress = onProgress ?? null;
     this.onReady = onReady ?? null;
     this.onFrameTiming = onFrameTiming ?? null;
@@ -144,19 +147,12 @@ export default class RenderExperience {
     this.resources.on("ready", () => {
       // Create legacy world objects (floor, environment, plane shader)
       // These don't need physics, so we create them directly
-      this.floor = new Floor(
-        this.scene,
-        this.resources as unknown as ResourcesType,
-      );
-      this.plane = new PlaneShader(
-        this.scene,
-        this.time as unknown as TimeType,
-        this.debug as unknown as DebugType,
-      );
+      this.floor = new Floor(this.scene, this.resources);
+      this.plane = new PlaneShader(this.scene, this.time, this.debug);
       this.environment = new Environment(
         this.scene,
-        this.resources as unknown as ResourcesType,
-        this.debug as unknown as DebugType,
+        this.resources,
+        this.debug,
       );
 
       this.onReady?.();
@@ -213,13 +209,7 @@ export default class RenderExperience {
     switch (type) {
       case "player": {
         // Create fox as the player entity
-        this.fox = new Fox(
-          this.scene,
-          this.resources as unknown as ResourcesType,
-          this.time as unknown as TimeType,
-          this.debug as unknown as DebugType,
-          // Don't pass inputState - movement is now handled by physics
-        );
+        this.fox = new Fox(this.scene, this.resources);
         object = this.fox.model;
         this.playerEntityId = id;
 
@@ -269,6 +259,9 @@ export default class RenderExperience {
       lastUpdateTime: performance.now(),
     });
 
+    // Rebuild shared buffer entity map to get updated indices
+    this.sharedBuffer.rebuildEntityMap();
+
     console.log("[RenderExperience] Spawned entity:", id, type);
   }
 
@@ -284,7 +277,7 @@ export default class RenderExperience {
       if (entity.object instanceof THREE.Mesh) {
         entity.object.geometry.dispose();
         if (Array.isArray(entity.object.material)) {
-          entity.object.material.forEach((m) => m.dispose());
+          entity.object.material?.forEach((m) => m?.dispose());
         } else {
           entity.object.material.dispose();
         }
@@ -296,41 +289,6 @@ export default class RenderExperience {
     if (this.playerEntityId === id) {
       this.playerEntityId = null;
       this.followCamera.setTarget(null);
-    }
-  }
-
-  applyTransformUpdates(batch: TransformUpdateBatch): void {
-    const now = performance.now();
-
-    for (const update of batch.updates) {
-      const entity = this.entities.get(update.id);
-      if (!entity) continue;
-
-      // Store previous transform (current target becomes previous)
-      entity.previousTransform.position.copy(entity.targetTransform.position);
-      entity.previousTransform.quaternion.copy(
-        entity.targetTransform.quaternion,
-      );
-
-      // Set new target transform
-      entity.targetTransform.position.set(
-        update.position.x,
-        update.position.y,
-        update.position.z,
-      );
-      entity.targetTransform.quaternion.set(
-        update.rotation.x,
-        update.rotation.y,
-        update.rotation.z,
-        update.rotation.w,
-      );
-
-      entity.lastUpdateTime = now;
-
-      // Update animation based on movement for player
-      if (entity.type === "player" && this.fox) {
-        this.updatePlayerAnimation();
-      }
     }
   }
 
@@ -370,26 +328,8 @@ export default class RenderExperience {
     const now = performance.now();
     const physicsInterval = 1000 / 60; // Physics runs at 60Hz
 
-    // Interpolate entity transforms
-    for (const entity of this.entities.values()) {
-      const timeSinceUpdate = now - entity.lastUpdateTime;
-      // Alpha is how far we are between physics updates (0 to 1)
-      const alpha = Math.min(timeSinceUpdate / physicsInterval, 1);
-
-      // Interpolate position
-      entity.object.position.lerpVectors(
-        entity.previousTransform.position,
-        entity.targetTransform.position,
-        alpha,
-      );
-
-      // Interpolate rotation (slerp for quaternions)
-      entity.object.quaternion.slerpQuaternions(
-        entity.previousTransform.quaternion,
-        entity.targetTransform.quaternion,
-        alpha,
-      );
-    }
+    // Read transforms from SharedArrayBuffer (required)
+    this.readTransformsFromSharedBuffer(now, physicsInterval);
 
     // Update animation mixers
     const deltaSeconds = delta * 0.001;
@@ -403,6 +343,68 @@ export default class RenderExperience {
     // Render
     this.renderer.render(this.scene, this.camera);
     this.onFrameTiming?.(delta);
+  }
+
+  /**
+   * Read transforms directly from SharedArrayBuffer (zero-copy)
+   */
+  private readTransformsFromSharedBuffer(
+    now: number,
+    physicsInterval: number,
+  ): void {
+    const currentFrame = this.sharedBuffer.getFrameCounter();
+    const newFrameAvailable = currentFrame !== this.lastPhysicsFrame;
+
+    for (const entity of this.entities.values()) {
+      const bufferIndex = this.sharedBuffer.getEntityIndex(entity.id);
+      if (bufferIndex < 0) continue;
+
+      if (newFrameAvailable) {
+        // New physics frame: store old target as previous, read new target
+        entity.previousTransform.position.copy(entity.targetTransform.position);
+        entity.previousTransform.quaternion.copy(
+          entity.targetTransform.quaternion,
+        );
+
+        const transform = this.sharedBuffer.readTransform(bufferIndex);
+        entity.targetTransform.position.set(
+          transform.posX,
+          transform.posY,
+          transform.posZ,
+        );
+        entity.targetTransform.quaternion.set(
+          transform.rotX,
+          transform.rotY,
+          transform.rotZ,
+          transform.rotW,
+        );
+        entity.lastUpdateTime = now;
+
+        // Update animation for player
+        if (entity.type === "player" && this.fox) {
+          this.updatePlayerAnimation();
+        }
+      }
+
+      // Interpolate between previous and target
+      const timeSinceUpdate = now - entity.lastUpdateTime;
+      const alpha = Math.min(timeSinceUpdate / physicsInterval, 1);
+
+      entity.object.position.lerpVectors(
+        entity.previousTransform.position,
+        entity.targetTransform.position,
+        alpha,
+      );
+      entity.object.quaternion.slerpQuaternions(
+        entity.previousTransform.quaternion,
+        entity.targetTransform.quaternion,
+        alpha,
+      );
+    }
+
+    if (newFrameAvailable) {
+      this.lastPhysicsFrame = currentFrame;
+    }
   }
 
   dispose(): void {
