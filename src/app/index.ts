@@ -74,14 +74,14 @@ export default class App {
         this.handleLoadProgress(progress);
       },
       onReady: () => {
-        this.handleLoadComplete();
+        // Resources loaded, scene objects created (but entities not yet spawned)
       },
       onFrameTiming: (deltaMs: number) => {
         this.debug.updateFrameTiming(deltaMs);
       },
     });
 
-    // Set up debug callbacks
+    // Set up debug callbacks and fetch bindings after all entities are spawned
     const renderApi = this.bridge.getRenderApi();
     if (this.debug.active && renderApi) {
       this.debug.setUpdateCallback((event) => {
@@ -91,6 +91,10 @@ export default class App {
       this.debug.setActionCallback((id) => {
         renderApi.triggerDebugAction(id);
       });
+
+      // Fetch debug bindings now that all entities are spawned
+      const bindings = await renderApi.getDebugBindings();
+      this.debug.registerBindings(bindings);
     }
   }
 
@@ -161,15 +165,6 @@ export default class App {
     // Loading progress can be used for UI updates
     // Currently handled silently - add loading UI here if needed
     console.log("Loading progress:", _progress);
-  }
-
-  private async handleLoadComplete(): Promise<void> {
-    // Fetch and register debug bindings now that world is loaded
-    const renderApi = this.bridge.getRenderApi();
-    if (this.debug.active && renderApi) {
-      const bindings = await renderApi.getDebugBindings();
-      this.debug.registerBindings(bindings);
-    }
   }
 
   private startStatsLoop(): void {

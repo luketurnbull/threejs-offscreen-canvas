@@ -83,7 +83,7 @@ export default class DebugManager {
 
     let folder = this.folders.get(name);
     if (!folder) {
-      folder = this.pane.addFolder({ title: name, expanded: true });
+      folder = this.pane.addFolder({ title: name, expanded: false });
       this.folders.set(name, folder);
     }
     return folder;
