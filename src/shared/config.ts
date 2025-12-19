@@ -83,12 +83,6 @@ export const config = {
     angularDamping: 1.0, // Prevent spinning
   },
 
-  // Ground plane (legacy, replaced by terrain)
-  ground: {
-    dimensions: { x: 100, y: 1, z: 100 },
-    position: { x: 0, y: -0.5, z: 0 },
-  },
-
   // Terrain configuration
   terrain: {
     size: 100, // World units (X and Z)
