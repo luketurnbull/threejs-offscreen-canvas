@@ -6,6 +6,7 @@
       "~/app/*": ["src/app/*"],
       "~/workers/*": ["src/workers/*"],
       "~/shared": ["src/shared/index.ts"],
+      "~/shared/buffers": ["src/shared/buffers/index.ts"],
       "~/shared/*": ["src/shared/*"],
       "~/shaders/*": ["src/shaders/*"],
     },

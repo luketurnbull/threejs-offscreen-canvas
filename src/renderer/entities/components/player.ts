@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 import type { RenderComponent, EntityContext } from "../types";
-import type InputState from "../../input-state";
+import type InputState from "../../systems/input-state";
 import Fox from "../../objects/fox";
 
 /**

@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type Debug from "../debug";
-import type { DebugFolder } from "../debug";
-import type Time from "../time";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
+import type Time from "../systems/time";
 import vertexShader from "./plane.vert";
 import fragmentShader from "./plane.frag";
 

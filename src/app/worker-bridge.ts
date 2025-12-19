@@ -142,6 +142,119 @@ export default class WorkerBridge {
     this.physicsApi.start();
   }
 
+  /**
+   * Spawn a dynamic box entity in both physics and render workers
+   */
+  async spawnDynamicBox(
+    position: { x: number; y: number; z: number },
+    size: { x: number; y: number; z: number } = { x: 1, y: 1, z: 1 },
+    color: number = 0x8b4513,
+  ): Promise<EntityId> {
+    if (!this.physicsApi || !this.renderApi) {
+      throw new Error("Workers not initialized");
+    }
+
+    const id = createEntityId();
+    const transform: Transform = {
+      position,
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      scale: { x: 1, y: 1, z: 1 },
+    };
+
+    // Register in shared buffer
+    this.sharedBuffer.registerEntity(id);
+
+    // Spawn physics body
+    await this.physicsApi.spawnEntity(
+      { id, type: "dynamic", transform },
+      {
+        type: "dynamic",
+        colliderType: "cuboid",
+        dimensions: size,
+        mass: 1,
+        friction: 0.5,
+        restitution: 0.3,
+      },
+    );
+
+    // Build debug collider for visualization
+    const debugCollider: DebugCollider = {
+      shape: {
+        type: "cuboid",
+        halfExtents: {
+          x: size.x / 2,
+          y: size.y / 2,
+          z: size.z / 2,
+        },
+      },
+    };
+
+    // Spawn render entity
+    await this.renderApi.spawnEntity(
+      id,
+      "dynamic-box",
+      { size, color },
+      debugCollider,
+    );
+
+    return id;
+  }
+
+  /**
+   * Spawn a dynamic sphere entity in both physics and render workers
+   */
+  async spawnDynamicSphere(
+    position: { x: number; y: number; z: number },
+    radius: number = 0.5,
+    color: number = 0x4169e1,
+  ): Promise<EntityId> {
+    if (!this.physicsApi || !this.renderApi) {
+      throw new Error("Workers not initialized");
+    }
+
+    const id = createEntityId();
+    const transform: Transform = {
+      position,
+      rotation: { x: 0, y: 0, z: 0, w: 1 },
+      scale: { x: 1, y: 1, z: 1 },
+    };
+
+    // Register in shared buffer
+    this.sharedBuffer.registerEntity(id);
+
+    // Spawn physics body (use ball collider)
+    await this.physicsApi.spawnEntity(
+      { id, type: "dynamic", transform },
+      {
+        type: "dynamic",
+        colliderType: "ball",
+        dimensions: { x: radius * 2, y: radius * 2, z: radius * 2 },
+        radius,
+        mass: 1,
+        friction: 0.3,
+        restitution: 0.6,
+      },
+    );
+
+    // Build debug collider for visualization
+    const debugCollider: DebugCollider = {
+      shape: {
+        type: "ball",
+        radius,
+      },
+    };
+
+    // Spawn render entity
+    await this.renderApi.spawnEntity(
+      id,
+      "dynamic-sphere",
+      { radius, color },
+      debugCollider,
+    );
+
+    return id;
+  }
+
   private async spawnWorld(): Promise<void> {
     if (!this.physicsApi || !this.renderApi) return;
 
@@ -224,6 +337,36 @@ export default class WorkerBridge {
       undefined,
       playerDebugCollider,
     );
+
+    // Spawn test dynamic objects to verify physics sync
+    await this.spawnTestObjects();
+  }
+
+  /**
+   * Spawn test dynamic objects to demonstrate physics sync
+   */
+  private async spawnTestObjects(): Promise<void> {
+    // Spawn a few dynamic boxes in a stack
+    await this.spawnDynamicBox(
+      { x: 3, y: 3, z: 0 },
+      { x: 1, y: 1, z: 1 },
+      0x8b4513,
+    );
+    await this.spawnDynamicBox(
+      { x: 3, y: 5, z: 0 },
+      { x: 1, y: 1, z: 1 },
+      0xa0522d,
+    );
+    await this.spawnDynamicBox(
+      { x: 3, y: 7, z: 0 },
+      { x: 1, y: 1, z: 1 },
+      0xcd853f,
+    );
+
+    // Spawn a few dynamic spheres
+    await this.spawnDynamicSphere({ x: -3, y: 4, z: 0 }, 0.5, 0x4169e1);
+    await this.spawnDynamicSphere({ x: -3, y: 6, z: 1 }, 0.4, 0x1e90ff);
+    await this.spawnDynamicSphere({ x: -3, y: 8, z: -1 }, 0.6, 0x00bfff);
   }
 
   resize(viewport: ViewportSize): void {

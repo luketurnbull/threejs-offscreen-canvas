@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type Resources from "../resources";
+import type Resources from "../systems/resources";
 
 export default class Floor {
   private scene: THREE.Scene;

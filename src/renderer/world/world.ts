@@ -1,23 +1,23 @@
 import * as THREE from "three";
 import type { EntityId, DebugCollider } from "~/shared/types";
-import type Resources from "./resources";
-import type Time from "./time";
-import type Debug from "./debug";
-import type InputState from "./input-state";
-import type Camera from "./camera";
+import type Resources from "../systems/resources";
+import type Time from "../systems/time";
+import type Debug from "../systems/debug";
+import type InputState from "../systems/input-state";
+import type Camera from "../core/camera";
 
 // Entity system
 import {
   EntityFactory,
   type RenderComponent,
   type EntityContext,
-} from "./entities";
+} from "../entities";
 
 // Scene objects (non-entity visuals)
-import Floor from "./objects/floor";
-import PlaneShader from "./objects/plane";
+import Floor from "../objects/floor";
+import PlaneShader from "../objects/plane";
 import Environment from "./environment";
-import PhysicsDebugRenderer from "./physics-debug-renderer";
+import PhysicsDebugRenderer from "../sync/physics-debug-renderer";
 
 /**
  * Context passed to World for creating entities and scene objects

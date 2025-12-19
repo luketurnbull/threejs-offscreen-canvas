@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
-import type Resources from "../resources";
-import type Time from "../time";
-import type Debug from "../debug";
-import type InputState from "../input-state";
+import type Resources from "../systems/resources";
+import type Time from "../systems/time";
+import type Debug from "../systems/debug";
+import type InputState from "../systems/input-state";
 
 /**
  * EntityContext - Shared context passed to entity components
@@ -57,7 +57,10 @@ export interface RenderComponent {
    * Called each frame with interpolated transform from physics
    * Entity can apply additional logic after transform is set
    */
-  onTransformUpdate?(position: THREE.Vector3, quaternion: THREE.Quaternion): void;
+  onTransformUpdate?(
+    position: THREE.Vector3,
+    quaternion: THREE.Quaternion,
+  ): void;
 
   /**
    * Called when new physics frame arrives

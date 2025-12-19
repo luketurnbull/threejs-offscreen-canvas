@@ -1,4 +1,10 @@
 import type { EntityId } from "../types/entity";
+import { config } from "../config";
+import {
+  assertBufferIndexInBounds,
+  debugAssert,
+  validateBufferIndex,
+} from "../validation";
 
 /**
  * Layout per entity in Float32Array (14 floats total):
@@ -12,9 +18,9 @@ import type { EntityId } from "../types/entity";
  * [frameCounter, entityCount, ...entityIds]
  */
 
-const FLOATS_PER_ENTITY = 14; // current (7) + previous (7)
-const CONTROL_HEADER_SIZE = 2; // frameCounter, entityCount
-const MAX_ENTITIES = 64;
+const FLOATS_PER_ENTITY = config.buffers.floatsPerEntity;
+const CONTROL_HEADER_SIZE = config.buffers.controlHeaderSize;
+const MAX_ENTITIES = config.buffers.maxEntities;
 
 // Control buffer layout
 const FRAME_COUNTER_INDEX = 0;
@@ -190,6 +196,8 @@ export class SharedTransformBuffer {
    *
    * This shifts the current transform to previous, then writes the new current.
    * This enables smooth interpolation between physics frames.
+   *
+   * @throws Error if entityIndex is out of bounds
    */
   writeTransform(
     entityIndex: number,
@@ -201,6 +209,19 @@ export class SharedTransformBuffer {
     rotZ: number,
     rotW: number,
   ): void {
+    // Validate buffer index bounds
+    assertBufferIndexInBounds(
+      entityIndex,
+      MAX_ENTITIES,
+      "SharedTransformBuffer.writeTransform",
+    );
+
+    // Debug-only check that the index corresponds to a registered entity
+    debugAssert(
+      this.isEntityIndexValid(entityIndex),
+      `Entity index ${entityIndex} has no registered entity`,
+    );
+
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
     // Shift current → previous (indices 7-13)
@@ -273,11 +294,20 @@ export class SharedTransformBuffer {
   /**
    * Read both current and previous transform data for an entity
    * Called by Render Worker each render frame for interpolation
+   *
+   * @throws Error if entityIndex is out of bounds
    */
   readTransform(entityIndex: number): {
     current: TransformData;
     previous: TransformData;
   } {
+    // Validate buffer index bounds
+    assertBufferIndexInBounds(
+      entityIndex,
+      MAX_ENTITIES,
+      "SharedTransformBuffer.readTransform",
+    );
+
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
     return {
@@ -300,6 +330,23 @@ export class SharedTransformBuffer {
         rotW: this.transformView[offset + 13],
       },
     };
+  }
+
+  /**
+   * Check if an entity index corresponds to a registered entity
+   * Used for debug assertions
+   */
+  private isEntityIndexValid(index: number): boolean {
+    const count = Atomics.load(this.controlView, ENTITY_COUNT_INDEX);
+    return index >= 0 && index < count;
+  }
+
+  /**
+   * Validate a buffer index without throwing
+   * Returns a ValidationResult that can be checked
+   */
+  validateIndex(index: number): ReturnType<typeof validateBufferIndex> {
+    return validateBufferIndex(index, MAX_ENTITIES);
   }
 
   /**

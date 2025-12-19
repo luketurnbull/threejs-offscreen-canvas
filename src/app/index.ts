@@ -3,6 +3,7 @@ import CanvasManager from "./canvas-manager";
 import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
 import WorkerBridge from "./worker-bridge";
+import { ErrorOverlay } from "./components/error-overlay";
 
 /**
  * App - Main thread orchestrator
@@ -15,6 +16,7 @@ export default class App {
   private input: InputManager;
   private debug: DebugManager;
   private bridge: WorkerBridge;
+  private errorOverlay: ErrorOverlay | null = null;
 
   private resizeObserver: ResizeObserver | null = null;
   private pixelRatioMediaQuery: MediaQueryList | null = null;
@@ -24,23 +26,20 @@ export default class App {
   constructor() {
     // Check for OffscreenCanvas support
     if (!CanvasManager.isSupported()) {
-      this.showError(
-        "Your browser doesn't support OffscreenCanvas. Please use a modern browser.",
-      );
+      this.showError(ErrorOverlay.MESSAGES.OFFSCREEN_CANVAS_UNSUPPORTED);
       throw new Error("OffscreenCanvas not supported");
     }
 
     // Check for SharedArrayBuffer support (requires cross-origin isolation)
     if (typeof SharedArrayBuffer === "undefined") {
-      this.showError(
-        "SharedArrayBuffer is not available. This may be due to missing cross-origin isolation headers (COOP/COEP).",
-      );
+      this.showError(ErrorOverlay.MESSAGES.SHARED_ARRAY_BUFFER_UNSUPPORTED);
       throw new Error("SharedArrayBuffer not supported");
     }
 
     // Initialize managers
     const canvasElement = document.querySelector<HTMLCanvasElement>("#webgl");
     if (!canvasElement) {
+      this.showError(ErrorOverlay.MESSAGES.CANVAS_NOT_FOUND);
       throw new Error("Canvas element #webgl not found");
     }
 
@@ -60,7 +59,8 @@ export default class App {
       this._initialized = true;
     } catch (error) {
       console.error("Failed to initialize app:", error);
-      this.showError("Failed to initialize application");
+      const details = error instanceof Error ? error.message : String(error);
+      this.showError(ErrorOverlay.MESSAGES.INIT_FAILED, details);
     }
   }
 
@@ -160,6 +160,7 @@ export default class App {
   private handleLoadProgress(_progress: number): void {
     // Loading progress can be used for UI updates
     // Currently handled silently - add loading UI here if needed
+    console.log("Loading progress:", _progress);
   }
 
   private async handleLoadComplete(): Promise<void> {
@@ -180,56 +181,24 @@ export default class App {
     loop();
   }
 
-  private showError(message: string): void {
-    const errorDiv = document.createElement("div");
-    errorDiv.className = "error-overlay";
-    errorDiv.innerHTML = `
-      <div class="error-content">
-        <h1>Error</h1>
-        <p>${message}</p>
-      </div>
-    `;
-
-    // Add styles
-    const style = document.createElement("style");
-    style.textContent = `
-      .error-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.9);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        font-family: system-ui, sans-serif;
-      }
-      .error-content {
-        background: #1a1a1a;
-        padding: 2rem 3rem;
-        border-radius: 8px;
-        border: 1px solid #333;
-        text-align: center;
-        max-width: 500px;
-      }
-      .error-content h1 {
-        color: #ff4444;
-        margin: 0 0 1rem;
-        font-size: 1.5rem;
-      }
-      .error-content p {
-        color: #ccc;
-        margin: 0;
-        line-height: 1.6;
-      }
-    `;
-    document.head.appendChild(style);
-    document.body.appendChild(errorDiv);
+  /**
+   * Show error overlay with a message
+   * @param message - Main error message
+   * @param details - Optional technical details
+   */
+  private showError(message: string, details?: string): void {
+    if (!this.errorOverlay) {
+      this.errorOverlay = new ErrorOverlay();
+      document.body.appendChild(this.errorOverlay);
+    }
+    this.errorOverlay.show(message, details);
   }
 
   dispose(): void {
+    // Clean up error overlay
+    this.errorOverlay?.remove();
+    this.errorOverlay = null;
+
     // Clean up pixel ratio listener
     if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
       this.pixelRatioMediaQuery.removeEventListener(

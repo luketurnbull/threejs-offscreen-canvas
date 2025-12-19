@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
-import type { RenderComponent } from "./entities";
+import type { RenderComponent } from "../entities";
 
 /**
  * TransformSync - Physics-to-render transform interpolation

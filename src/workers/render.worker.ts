@@ -17,6 +17,11 @@ import type {
   SharedBuffers,
   DebugCollider,
 } from "~/shared/types";
+import {
+  assertInitialized,
+  assertValidEntityId,
+  assertNonEmptyString,
+} from "~/shared/validation";
 import Experience from "../renderer";
 
 /**
@@ -26,9 +31,19 @@ import Experience from "../renderer";
  * - Lazy initialization (experience created on init())
  * - SharedArrayBuffer wrapping
  * - Method delegation to experience instance
+ * - Input validation at worker boundary
  */
 function createRenderApi(): RenderApi {
   let experience: Experience | null = null;
+
+  /**
+   * Assert that Experience is initialized
+   * @throws Error if experience is null
+   */
+  const assertExperienceInitialized = (): Experience => {
+    assertInitialized(experience, "Experience", "RenderApi");
+    return experience;
+  };
 
   return {
     async init(
@@ -40,6 +55,14 @@ function createRenderApi(): RenderApi {
       onReady?: () => void,
       onFrameTiming?: (deltaMs: number) => void,
     ): Promise<void> {
+      // Warn if already initialized
+      if (experience) {
+        console.warn(
+          "[RenderApi.init] Already initialized. Disposing and reinitializing.",
+        );
+        experience.dispose();
+      }
+
       const sharedBuffer = new SharedTransformBuffer(
         sharedBuffers.control,
         sharedBuffers.transform,
@@ -58,23 +81,24 @@ function createRenderApi(): RenderApi {
     },
 
     resize(viewport: ViewportSize): void {
-      experience?.resize(viewport);
+      assertExperienceInitialized().resize(viewport);
     },
 
     handleInput(event: SerializedInputEvent): void {
-      experience?.handleInput(event);
+      assertExperienceInitialized().handleInput(event);
     },
 
     async getDebugBindings(): Promise<DebugBinding[]> {
-      return experience?.getDebugBindings() ?? [];
+      return assertExperienceInitialized().getDebugBindings();
     },
 
     updateDebug(event: DebugUpdateEvent): void {
-      experience?.updateDebug(event);
+      assertExperienceInitialized().updateDebug(event);
     },
 
     triggerDebugAction(id: string): void {
-      experience?.triggerDebugAction(id);
+      assertNonEmptyString(id, "action id", "RenderApi.triggerDebugAction");
+      assertExperienceInitialized().triggerDebugAction(id);
     },
 
     async spawnEntity(
@@ -83,15 +107,25 @@ function createRenderApi(): RenderApi {
       data?: Record<string, unknown>,
       debugCollider?: DebugCollider,
     ): Promise<void> {
-      await experience?.spawnEntity(id, type, data, debugCollider);
+      // Validate inputs at worker boundary
+      assertValidEntityId(id, "RenderApi.spawnEntity");
+      assertNonEmptyString(type, "entity type", "RenderApi.spawnEntity");
+
+      await assertExperienceInitialized().spawnEntity(
+        id,
+        type,
+        data,
+        debugCollider,
+      );
     },
 
     removeEntity(id: EntityId): void {
-      experience?.removeEntity(id);
+      assertValidEntityId(id, "RenderApi.removeEntity");
+      assertExperienceInitialized().removeEntity(id);
     },
 
     async getPlayerEntityId(): Promise<EntityId | null> {
-      return experience?.getPlayerEntityId() ?? null;
+      return assertExperienceInitialized().getPlayerEntityId();
     },
 
     dispose(): void {

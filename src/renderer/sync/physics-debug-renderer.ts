@@ -4,7 +4,8 @@ import type {
   DebugCollider,
   DebugColliderShape,
 } from "~/shared/types";
-import type { RenderComponent } from "./entities";
+import type { RenderComponent } from "../entities";
+import { config } from "~/shared/config";
 
 /**
  * PhysicsDebugRenderer - Visualizes physics colliders as wireframes
@@ -19,10 +20,10 @@ class PhysicsDebugRenderer {
 
   // Shared materials for all debug meshes
   private readonly debugMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ff00,
+    color: config.debug.colliderColor,
     wireframe: true,
     transparent: true,
-    opacity: 0.5,
+    opacity: config.debug.colliderOpacity,
   });
 
   constructor(scene: THREE.Scene) {
@@ -107,29 +108,6 @@ class PhysicsDebugRenderer {
       if (entity) {
         group.position.copy(entity.object.position);
         group.quaternion.copy(entity.object.quaternion);
-      }
-    }
-  }
-
-  /**
-   * Sync debug meshes with current entity/collider state
-   * Adds new meshes, removes stale ones
-   */
-  sync(
-    entities: Map<EntityId, RenderComponent>,
-    colliders: Map<EntityId, DebugCollider>,
-  ): void {
-    // Add new meshes for entities with colliders
-    for (const [id, collider] of colliders) {
-      if (!this.debugMeshes.has(id) && entities.has(id)) {
-        this.addEntity(id, collider);
-      }
-    }
-
-    // Remove stale meshes
-    for (const id of this.debugMeshes.keys()) {
-      if (!entities.has(id)) {
-        this.removeEntity(id);
       }
     }
   }

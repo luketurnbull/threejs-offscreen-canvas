@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import type Resources from "./resources";
-import type Debug from "./debug";
-import type { DebugFolder } from "./debug";
+import type Resources from "../systems/resources";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 import { config } from "~/shared/config";
 
 export default class Environment {
