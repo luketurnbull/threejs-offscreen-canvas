@@ -173,6 +173,175 @@ Uses position + velocity at both endpoints for smoother curves.
 3. Test at different display refresh rates (60Hz, 120Hz, 144Hz)
 4. Test with CPU throttling to simulate slow physics
 
+## Known Issues & Debugging History
+
+This section documents ongoing vibration issues and attempted fixes for future reference.
+
+### Issue: Subtle Vibration During Movement
+
+**Symptom**: The fox character exhibits subtle vibration/jitter when moving, particularly noticeable on the player entity.
+
+**Environment Differences**:
+| Environment | Behavior |
+|-------------|----------|
+| Local (dev) | Smooth with constant interval, subtle vibration with actual interval |
+| Deployed (Vercel) | Noticeable vibration with constant interval, similar subtle vibration with actual interval |
+
+### Attempted Fixes
+
+#### Attempt 1: Constant Interval (Original)
+
+```typescript
+// transform-sync.ts
+const interval = timing.interval > 0 ? timing.interval : 1000 / 60;
+```
+
+**Result**: 
+- Local: Smooth
+- Deployed: Noticeable vibration
+
+**Analysis**: `setTimeout` has more jitter in production (CPU contention, background tasks). When physics takes 20ms but we assume 16.67ms, alpha calculation is wrong:
+- Alpha = `timeSincePhysicsFrame / 16.67` = 1.2 (clamped to 1.0)
+- Object freezes, then jumps when next frame arrives
+
+#### Attempt 2: Actual Measured Interval (Current)
+
+```typescript
+// transform-sync.ts
+const actualInterval = timing.currentTime - timing.previousTime;
+const interval = actualInterval > 0 ? actualInterval : 1000 / 60;
+```
+
+**Result**:
+- Local: Subtle vibration introduced
+- Deployed: Similar to local (improved from before, but not perfect)
+
+**Analysis**: Using actual interval makes both environments behave similarly, but introduces subtle vibration locally. The actual interval varies frame-to-frame (14ms, 18ms, 16ms), causing alpha to be calculated against a moving target.
+
+### Root Cause Analysis
+
+The fundamental issue is a **timing mismatch** between:
+1. When physics ACTUALLY runs (variable due to setTimeout jitter)
+2. When we THINK physics runs (either constant or measured)
+3. When render reads the timing data (could be mid-write)
+
+**Possible contributing factors**:
+
+1. **setTimeout Jitter**: `setTimeout(fn, 16.67)` doesn't guarantee 16.67ms - it's a minimum delay
+2. **SharedArrayBuffer Race Condition**: Render might read timing before physics finishes writing
+3. **performance.now() Precision**: Different in different contexts
+4. **Camera Follow Compound Effect**: Camera following an interpolated position amplifies any jitter
+
+### Potential Future Fixes to Explore
+
+#### 1. Fixed Timestep Accumulator (Classic Game Loop)
+
+Instead of `setTimeout`, use `requestAnimationFrame` with an accumulator:
+
+```typescript
+// Physics worker
+let accumulator = 0;
+const FIXED_DT = 1000 / 60;
+
+function loop(timestamp) {
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  accumulator += dt;
+  
+  while (accumulator >= FIXED_DT) {
+    stepPhysics(FIXED_DT);
+    accumulator -= FIXED_DT;
+  }
+  
+  requestAnimationFrame(loop);
+}
+```
+
+**Pros**: More consistent timing, standard game dev pattern
+**Cons**: Requires restructuring physics worker, may not work well in Web Worker
+
+#### 2. Velocity-Based Extrapolation
+
+Store velocity in the shared buffer and extrapolate when alpha > 1:
+
+```typescript
+if (alpha > 1.0) {
+  // Physics is late, extrapolate using velocity
+  position = current + velocity * (alpha - 1.0) * interval;
+} else {
+  // Normal interpolation
+  position = lerp(previous, current, alpha);
+}
+```
+
+**Pros**: Handles late physics frames gracefully
+**Cons**: Requires velocity data, can overshoot on direction changes
+
+#### 3. Exponential Smoothing Hybrid
+
+Combine interpolation with exponential smoothing to dampen jitter:
+
+```typescript
+const interpolated = lerp(previous, current, alpha);
+const smoothed = lerp(lastRenderedPosition, interpolated, 0.8);
+```
+
+**Pros**: Dampens high-frequency jitter
+**Cons**: Adds latency, may feel sluggish
+
+#### 4. Atomic Timing Synchronization
+
+Ensure timing and transform writes are atomic:
+
+```typescript
+// Use a single write fence
+Atomics.store(timingView, WRITE_FENCE, 0);  // Start write
+writeTransforms();
+writeTiming();
+Atomics.store(timingView, WRITE_FENCE, 1);  // End write
+
+// Render side: wait for fence
+while (Atomics.load(timingView, WRITE_FENCE) === 0) {
+  // Spin or use Atomics.wait()
+}
+```
+
+**Pros**: Eliminates race conditions
+**Cons**: May introduce latency, complexity
+
+#### 5. Separate Camera Interpolation
+
+Interpolate camera position separately with more aggressive smoothing:
+
+```typescript
+// Camera follows with extra damping
+camera.position.lerp(targetPosition, 0.05); // Very smooth
+```
+
+**Pros**: Reduces perceived jitter without affecting physics accuracy
+**Cons**: Camera may lag behind fast movements
+
+### Current State
+
+As of the last update:
+- Using **actual measured interval** (`currentTime - previousTime`)
+- Both local and deployed have **similar subtle vibration**
+- This is a trade-off: consistent behavior across environments vs perfect local smoothness
+
+### Testing Checklist
+
+When testing interpolation changes:
+
+1. [ ] Test locally at 60Hz display
+2. [ ] Test locally at 120Hz+ display
+3. [ ] Test with CPU throttling (Chrome DevTools > Performance > CPU 4x slowdown)
+4. [ ] Deploy to Vercel and test
+5. [ ] Test with many physics objects (spawn 500 cubes)
+6. [ ] Test camera following vs stationary camera
+7. [ ] Test on mobile devices
+
+---
+
 ## References
 
 - [Fix Your Timestep! - Glenn Fiedler](https://gafferongames.com/post/fix_your_timestep/)

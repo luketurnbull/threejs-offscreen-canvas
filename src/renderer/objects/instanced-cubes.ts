@@ -44,6 +44,11 @@ export default class InstancedCubes {
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
 
+    // Disable frustum culling - instances are scattered across a large area by physics,
+    // but the base geometry's bounding sphere is tiny (single cube size).
+    // Without this, all cubes disappear when the camera moves away from origin.
+    this.mesh.frustumCulled = false;
+
     // Important: Use DynamicDrawUsage for frequently updated transforms
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
