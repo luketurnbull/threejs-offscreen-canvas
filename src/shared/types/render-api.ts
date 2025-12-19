@@ -76,6 +76,23 @@ export interface RenderApi {
    */
   getPlayerEntityId(): Promise<EntityId | null>;
 
+  // ============================================
+  // Instanced Cubes (for stress testing)
+  // ============================================
+
+  /**
+   * Spawn instanced cubes (batch operation for performance testing)
+   * @param entityIds - Pre-generated entity IDs for each cube
+   * @param size - Size of each cube
+   */
+  spawnCubes(entityIds: EntityId[], size: number): Promise<void>;
+
+  /**
+   * Remove instanced cubes
+   * @param entityIds - Entity IDs to remove
+   */
+  removeCubes(entityIds: EntityId[]): void;
+
   /**
    * Clean up and dispose resources
    */

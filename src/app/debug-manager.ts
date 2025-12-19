@@ -10,6 +10,12 @@ export interface DebugActionCallback {
   (id: string): void;
 }
 
+export interface MainThreadActions {
+  spawnCubes?: (count: number) => void;
+  clearCubes?: () => void;
+  getCubeCount?: () => number;
+}
+
 /**
  * DebugManager - Manages debug UI (Tweakpane + Stats.js) on main thread
  *
@@ -24,6 +30,7 @@ export default class DebugManager {
   private values: Map<string, unknown> = new Map();
   private onUpdate: DebugUpdateCallback | null = null;
   private onAction: DebugActionCallback | null = null;
+  private mainThreadActions: MainThreadActions | null = null;
 
   readonly active: boolean;
 
@@ -34,6 +41,58 @@ export default class DebugManager {
       this.initPane();
       this.initStats();
     }
+  }
+
+  /**
+   * Set main thread actions for cube spawning controls
+   */
+  setMainThreadActions(actions: MainThreadActions): void {
+    this.mainThreadActions = actions;
+
+    if (this.active && this.pane) {
+      this.createCubeStormControls();
+    }
+  }
+
+  private createCubeStormControls(): void {
+    if (!this.pane || !this.mainThreadActions) return;
+
+    const folder = this.getOrCreateFolder("Cube Storm");
+    folder.expanded = true;
+
+    // Cube count display
+    const cubeState = { count: 0 };
+    const countBinding = folder.addBinding(cubeState, "count", {
+      label: "Cubes",
+      readonly: true,
+    });
+
+    // Update count periodically
+    const updateCount = (): void => {
+      if (this.mainThreadActions?.getCubeCount) {
+        cubeState.count = this.mainThreadActions.getCubeCount();
+        countBinding.refresh();
+      }
+    };
+
+    // Spawn buttons
+    folder.addButton({ title: "Drop 100 Cubes" }).on("click", () => {
+      this.mainThreadActions?.spawnCubes?.(100);
+      setTimeout(updateCount, 100);
+    });
+
+    folder.addButton({ title: "Drop 500 Cubes" }).on("click", () => {
+      this.mainThreadActions?.spawnCubes?.(500);
+      setTimeout(updateCount, 100);
+    });
+
+    folder.addButton({ title: "Clear All Cubes" }).on("click", () => {
+      this.mainThreadActions?.clearCubes?.();
+      setTimeout(updateCount, 100);
+    });
+
+    // Initial count update
+    updateCount();
   }
 
   private initPane(): void {

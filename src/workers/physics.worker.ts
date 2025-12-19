@@ -97,6 +97,25 @@ function createPhysicsApi(): PhysicsApi {
       assertPhysicsInitialized().removeEntity(id);
     },
 
+    async spawnCubes(
+      entityIds: EntityId[],
+      positions: Float32Array,
+      size: number,
+    ): Promise<void> {
+      // Validate inputs at worker boundary
+      for (const id of entityIds) {
+        assertValidEntityId(id, "PhysicsApi.spawnCubes");
+      }
+      assertPhysicsInitialized().spawnCubes(entityIds, positions, size);
+    },
+
+    async removeCubes(entityIds: EntityId[]): Promise<void> {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "PhysicsApi.removeCubes");
+      }
+      assertPhysicsInitialized().removeCubes(entityIds);
+    },
+
     setPlayerInput(input: MovementInput): void {
       assertPhysicsInitialized().setPlayerInput(input);
     },

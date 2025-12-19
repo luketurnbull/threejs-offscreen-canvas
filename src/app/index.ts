@@ -92,6 +92,21 @@ export default class App {
         renderApi.triggerDebugAction(id);
       });
 
+      // Set up main thread actions for cube spawning (must be on main thread to orchestrate workers)
+      this.debug.setMainThreadActions({
+        spawnCubes: (count: number) => {
+          this.bridge.spawnCubeStorm(count).catch((err) => {
+            console.error("Failed to spawn cubes:", err);
+          });
+        },
+        clearCubes: () => {
+          this.bridge.clearCubes().catch((err) => {
+            console.error("Failed to clear cubes:", err);
+          });
+        },
+        getCubeCount: () => this.bridge.getCubeCount(),
+      });
+
       // Fetch debug bindings now that all entities are spawned
       const bindings = await renderApi.getDebugBindings();
       this.debug.registerBindings(bindings);

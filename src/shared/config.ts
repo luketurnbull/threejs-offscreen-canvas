@@ -102,7 +102,7 @@ export const config = {
 
   // Buffer configuration
   buffers: {
-    maxEntities: 64,
+    maxEntities: 1024, // Increased for instanced mesh stress testing
     floatsPerEntity: 14, // current (7) + previous (7)
     controlHeaderSize: 2, // frameCounter, entityCount
   },

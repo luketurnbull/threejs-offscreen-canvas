@@ -1,7 +1,8 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { EntityId } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import type { RenderComponent } from "../entities";
+import type InstancedCubes from "../objects/instanced-cubes";
 
 /**
  * TransformSync - Physics-to-render transform interpolation
@@ -20,6 +21,9 @@ class TransformSync {
   private sharedBuffer: SharedTransformBuffer;
   private lastPhysicsFrame = 0;
 
+  // Instanced cubes reference for batch transform updates
+  private instancedCubes: InstancedCubes | null = null;
+
   // Temporary objects for interpolation (avoid allocation in render loop)
   private tempQuatPrev = new THREE.Quaternion();
   private tempQuatCurrent = new THREE.Quaternion();
@@ -28,6 +32,13 @@ class TransformSync {
 
   constructor(sharedBuffer: SharedTransformBuffer) {
     this.sharedBuffer = sharedBuffer;
+  }
+
+  /**
+   * Set the instanced cubes renderer for batch transform updates
+   */
+  setInstancedCubes(instancedCubes: InstancedCubes | null): void {
+    this.instancedCubes = instancedCubes;
   }
 
   /**
@@ -72,11 +83,69 @@ class TransformSync {
       this.applyInterpolatedTransform(entity, alpha);
     }
 
+    // Update instanced cubes transforms
+    if (this.instancedCubes) {
+      this.updateInstancedCubes(alpha);
+    }
+
     if (newFrameAvailable) {
       this.lastPhysicsFrame = currentFrame;
     }
 
     return newFrameAvailable;
+  }
+
+  /**
+   * Update all instanced cube transforms with interpolation
+   */
+  private updateInstancedCubes(alpha: number): void {
+    if (!this.instancedCubes) return;
+
+    const entityIds = this.instancedCubes.getEntityIds();
+
+    for (const entityId of entityIds) {
+      const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
+      if (bufferIndex < 0) continue;
+
+      // Read both previous and current transforms from shared buffer
+      const transforms = this.sharedBuffer.readTransform(bufferIndex);
+
+      // Interpolate position
+      this.tempPosition.set(
+        this.lerp(transforms.previous.posX, transforms.current.posX, alpha),
+        this.lerp(transforms.previous.posY, transforms.current.posY, alpha),
+        this.lerp(transforms.previous.posZ, transforms.current.posZ, alpha),
+      );
+
+      // Spherical interpolation for quaternion rotation
+      this.tempQuatPrev.set(
+        transforms.previous.rotX,
+        transforms.previous.rotY,
+        transforms.previous.rotZ,
+        transforms.previous.rotW,
+      );
+      this.tempQuatCurrent.set(
+        transforms.current.rotX,
+        transforms.current.rotY,
+        transforms.current.rotZ,
+        transforms.current.rotW,
+      );
+      this.tempQuaternion.slerpQuaternions(
+        this.tempQuatPrev,
+        this.tempQuatCurrent,
+        alpha,
+      );
+
+      // Update the instance
+      this.instancedCubes.updateInstance(
+        entityId,
+        this.tempPosition,
+        this.tempQuaternion,
+      );
+    }
+
+    // Flush all changes to GPU
+    this.instancedCubes.commitUpdates();
   }
 
   /**

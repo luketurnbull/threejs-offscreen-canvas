@@ -78,6 +78,9 @@ function createRenderApi(): RenderApi {
         onReady,
         onFrameTiming,
       );
+
+      // Initialize WebGPU renderer (async)
+      await experience.init();
     },
 
     resize(viewport: ViewportSize): void {
@@ -126,6 +129,21 @@ function createRenderApi(): RenderApi {
 
     async getPlayerEntityId(): Promise<EntityId | null> {
       return assertExperienceInitialized().getPlayerEntityId();
+    },
+
+    async spawnCubes(entityIds: EntityId[], size: number): Promise<void> {
+      // Validate all entity IDs at worker boundary
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.spawnCubes");
+      }
+      await assertExperienceInitialized().spawnCubes(entityIds, size);
+    },
+
+    removeCubes(entityIds: EntityId[]): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.removeCubes");
+      }
+      assertExperienceInitialized().removeCubes(entityIds);
     },
 
     dispose(): void {

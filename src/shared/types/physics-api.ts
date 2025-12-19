@@ -135,6 +135,21 @@ export interface PhysicsApi {
   removeEntity(id: EntityId): void;
 
   /**
+   * Spawn multiple cubes at once for stress testing
+   * Entity IDs must already be registered in the shared buffer
+   */
+  spawnCubes(
+    entityIds: EntityId[],
+    positions: Float32Array,
+    size: number,
+  ): Promise<void>;
+
+  /**
+   * Remove multiple cubes at once
+   */
+  removeCubes(entityIds: EntityId[]): Promise<void>;
+
+  /**
    * Update player movement input
    */
   setPlayerInput(input: MovementInput): void;

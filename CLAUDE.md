@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Add `#debug` to the URL (e.g., `http://localhost:5173/#debug`) to enable:
 - Tweakpane debug UI
 - Stats.js performance monitor (FPS, MS, MB)
+- Cube Storm controls (spawn/clear physics cubes for stress testing)
 
 ## Architecture
 
@@ -30,7 +31,7 @@ Multi-worker Three.js application with physics. See `docs/architecture.md` for f
 
 ```
 Experience (orchestrator) - index.ts
-    ├── Renderer (WebGLRenderer wrapper) - renderer.ts
+    ├── Renderer (WebGPURenderer wrapper) - renderer.ts
     ├── Camera (PerspectiveCamera + follow) - camera.ts
     ├── World (entities + scene objects) - world.ts
     ├── TransformSync (physics interpolation) - transform-sync.ts
@@ -44,14 +45,14 @@ src/
   main.ts                 # Entry point
   
   app/                    # Main thread orchestration
-  renderer/               # Three.js domain code
+  renderer/               # Three.js domain code (WebGPU)
     index.ts              # Experience (orchestrator)
-    renderer.ts           # WebGLRenderer wrapper
+    renderer.ts           # WebGPURenderer wrapper
     camera.ts             # PerspectiveCamera + follow
     world.ts              # Entity + scene management
     transform-sync.ts     # Physics interpolation
     entities/             # Entity component system
-    objects/              # Visual components (fox, floor, plane)
+    objects/              # Visual components (fox, floor, instanced-cubes)
   physics/                # Rapier domain code
   workers/                # Thin worker entry points
   shared/                 # Cross-worker types, buffers, config
@@ -94,9 +95,9 @@ Create in `renderer/objects/` and instantiate in `World.createSceneObjects()`:
 
 ```typescript
 // renderer/objects/my-object.ts
-import * as THREE from "three";
-import type Resources from "../resources";
-import type Time from "../time";
+import * as THREE from "three/webgpu";
+import type Resources from "../systems/resources";
+import type Time from "../systems/time";
 
 export default class MyObject {
   private scene: THREE.Scene;

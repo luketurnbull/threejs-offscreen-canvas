@@ -1,10 +1,11 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { EntityId, DebugCollider } from "~/shared/types";
 import type Resources from "../systems/resources";
 import type Time from "../systems/time";
 import type Debug from "../systems/debug";
 import type InputState from "../systems/input-state";
 import type Camera from "../core/camera";
+import type TransformSync from "../sync/transform-sync";
 
 // Entity system
 import {
@@ -17,6 +18,7 @@ import {
 import Floor from "../objects/floor";
 import Environment from "./environment";
 import PhysicsDebugRenderer from "../sync/physics-debug-renderer";
+import InstancedCubes from "../objects/instanced-cubes";
 
 /**
  * Context passed to World for creating entities and scene objects
@@ -39,6 +41,7 @@ export interface WorldContext {
  * - Entity lifecycle (spawn, remove, update)
  * - Calling entity lifecycle hooks (onRenderFrame, onPhysicsFrame)
  * - Tracking player entity for camera following
+ * - Managing instanced cubes for stress testing
  */
 class World {
   private context: WorldContext;
@@ -52,6 +55,10 @@ class World {
   private debugColliders: Map<EntityId, DebugCollider> = new Map();
   private physicsDebugRenderer: PhysicsDebugRenderer;
 
+  // Instanced cubes for stress testing
+  private instancedCubes: InstancedCubes | null = null;
+  private transformSync: TransformSync | null = null;
+
   // Scene objects (non-entity visuals that don't need physics sync)
   private sceneObjects: {
     floor: Floor | null;
@@ -64,6 +71,13 @@ class World {
       context.scene,
       context.debug,
     );
+  }
+
+  /**
+   * Set the transform sync reference for instanced cube updates
+   */
+  setTransformSync(transformSync: TransformSync): void {
+    this.transformSync = transformSync;
   }
 
   /**
@@ -151,6 +165,49 @@ class World {
     return this.entities;
   }
 
+  // ============================================
+  // Instanced Cubes (stress testing)
+  // ============================================
+
+  /**
+   * Spawn instanced cubes
+   * Creates InstancedCubes renderer lazily on first spawn
+   */
+  spawnCubes(entityIds: EntityId[], size: number): void {
+    // Lazy create InstancedCubes on first spawn
+    if (!this.instancedCubes) {
+      this.instancedCubes = new InstancedCubes(
+        this.context.scene,
+        1000, // max count
+        size,
+      );
+
+      // Wire to TransformSync
+      if (this.transformSync) {
+        this.transformSync.setInstancedCubes(this.instancedCubes);
+      }
+    }
+
+    // Add cubes to the instanced mesh
+    this.instancedCubes.addCubes(entityIds);
+  }
+
+  /**
+   * Remove instanced cubes
+   */
+  removeCubes(entityIds: EntityId[]): void {
+    if (!this.instancedCubes) return;
+    this.instancedCubes.removeCubes(entityIds);
+  }
+
+  /**
+   * Clear all instanced cubes
+   */
+  clearCubes(): void {
+    if (!this.instancedCubes) return;
+    this.instancedCubes.clear();
+  }
+
   /**
    * Get all debug colliders (for PhysicsDebugRenderer)
    */
@@ -227,6 +284,10 @@ class World {
       entity.dispose();
     }
     this.entities.clear();
+
+    // Dispose instanced cubes
+    this.instancedCubes?.dispose();
+    this.instancedCubes = null;
 
     // Dispose scene objects
     this.sceneObjects.floor?.dispose();

@@ -70,11 +70,12 @@ Inspired by Bruno Simon's Three.js Journey architecture, using dependency inject
 ```
 Experience (orchestrator)
     │
-    ├── Renderer (WebGLRenderer wrapper)
+    ├── Renderer (WebGPURenderer wrapper)
     ├── Camera (PerspectiveCamera + follow behavior)
     ├── World (entities + scene objects)
     │     ├── EntityFactory
-    │     ├── Floor, PlaneShader, Environment
+    │     ├── Floor, Environment
+    │     ├── InstancedCubes (stress testing)
     │     └── Entities (player, ground, etc.)
     ├── TransformSync (physics interpolation)
     ├── Time, Debug, Resources, InputState
@@ -86,10 +87,11 @@ Each class has a single responsibility:
 | Class | File | Responsibility |
 |-------|------|----------------|
 | Experience | `index.ts` | Entry point, orchestrator, update loop |
-| Renderer | `renderer.ts` | WebGLRenderer config/render/resize |
+| Renderer | `renderer.ts` | WebGPURenderer config/render/resize |
 | Camera | `camera.ts` | PerspectiveCamera + third-person follow |
 | World | `world.ts` | Entity + scene object management |
 | TransformSync | `transform-sync.ts` | Physics-to-render interpolation |
+| InstancedCubes | `instanced-cubes.ts` | GPU-instanced cube rendering |
 
 ### 4. Centralized Configuration
 
@@ -497,11 +499,99 @@ const unsubscribe = time.on("tick", ({ delta, elapsed }) => {
 });
 ```
 
+## WebGPU Renderer
+
+The project uses Three.js WebGPURenderer for improved GPU utilization:
+
+```typescript
+// Import from webgpu build
+import * as THREE from "three/webgpu";
+
+// WebGPURenderer requires async initialization
+const renderer = new THREE.WebGPURenderer({
+  canvas: offscreenCanvas,
+  antialias: true,
+});
+await renderer.init();  // Required before rendering
+```
+
+### Key Differences from WebGLRenderer
+
+| Feature | WebGL | WebGPU |
+|---------|-------|--------|
+| Initialization | Synchronous | Async (`await renderer.init()`) |
+| Import path | `"three"` | `"three/webgpu"` |
+| Driver overhead | Higher | Lower (native API) |
+| Compute shaders | Not supported | Supported (future) |
+
+### Fallback to WebGL
+
+If needed, WebGPU can fall back to WebGL2:
+
+```typescript
+new THREE.WebGPURenderer({ forceWebGL: true });
+```
+
+## Instanced Mesh Stress Testing
+
+The project includes an InstancedMesh-based cube spawner for stress testing the WebGPU + Web Workers + Physics pipeline.
+
+### Architecture
+
+```
+WorkerBridge (Main Thread)
+    │
+    ├── Generate EntityIds
+    ├── Register in SharedTransformBuffer
+    │
+    ├── physicsApi.spawnCubes(entityIds, positions, size)
+    │   └── Creates Rapier RigidBodies for each cube
+    │
+    └── renderApi.spawnCubes(entityIds, size)
+        └── World.spawnCubes()
+            └── InstancedCubes.addCubes()
+```
+
+### InstancedCubes Component
+
+Efficiently renders hundreds of cubes in a single draw call:
+
+```typescript
+// Uses DynamicDrawUsage for frequent transform updates
+mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+// Update transforms from SharedArrayBuffer each frame
+for (const entityId of entityIds) {
+  const transform = sharedBuffer.readTransform(bufferIndex);
+  mesh.setMatrixAt(index, interpolatedMatrix);
+}
+mesh.instanceMatrix.needsUpdate = true;
+```
+
+### Debug Controls
+
+Access via `#debug` URL hash:
+
+| Control | Action |
+|---------|--------|
+| Drop 100 Cubes | Spawns 100 physics cubes |
+| Drop 500 Cubes | Spawns 500 physics cubes |
+| Clear All Cubes | Removes all spawned cubes |
+| Cubes counter | Shows current cube count |
+
+### Performance Characteristics
+
+- Single draw call for all cubes (GPU instancing)
+- Zero-copy transform sync via SharedArrayBuffer
+- Interpolated transforms for smooth rendering
+- Physics runs at fixed 60Hz, rendering at display refresh rate
+
 ## Browser Support
 
 Requires:
 - OffscreenCanvas (Chrome 69+, Firefox 105+, Safari 16.4+)
 - SharedArrayBuffer (requires COOP/COEP headers)
 - ES Modules in Workers
+- WebGPU (Chrome 113+, Firefox 127+, Safari 18+) or WebGL2 fallback
 
 No fallback - shows error if unsupported.

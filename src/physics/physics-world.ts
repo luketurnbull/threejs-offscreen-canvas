@@ -215,6 +215,68 @@ export default class PhysicsWorld {
     this.entityIndices.set(id, bufferIndex);
   }
 
+  /**
+   * Spawn multiple cubes at once for stress testing
+   * Returns array of entity IDs for the spawned cubes
+   */
+  spawnCubes(
+    entityIds: EntityId[],
+    positions: Float32Array,
+    size: number,
+  ): void {
+    const { world, sharedBuffer } = this.ensureInitialized();
+
+    // Rebuild entity map to see IDs registered by main thread
+    sharedBuffer.rebuildEntityMap();
+
+    const count = entityIds.length;
+
+    for (let i = 0; i < count; i++) {
+      const id = entityIds[i];
+      const x = positions[i * 3];
+      const y = positions[i * 3 + 1];
+      const z = positions[i * 3 + 2];
+
+      // Create dynamic rigid body
+      const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(x, y, z)
+        .setLinearDamping(0.1)
+        .setAngularDamping(0.1);
+
+      const body = world.createRigidBody(bodyDesc);
+
+      // Create box collider
+      const halfSize = size / 2;
+      const colliderDesc = RAPIER.ColliderDesc.cuboid(
+        halfSize,
+        halfSize,
+        halfSize,
+      )
+        .setMass(1)
+        .setFriction(0.5)
+        .setRestitution(0.3);
+
+      const collider = world.createCollider(colliderDesc, body);
+
+      // Store references
+      this.bodies.set(id, body);
+      this.colliders.set(id, collider);
+
+      // Get buffer index from shared buffer
+      const bufferIndex = sharedBuffer.getEntityIndex(id);
+      this.entityIndices.set(id, bufferIndex);
+    }
+  }
+
+  /**
+   * Remove multiple entities at once
+   */
+  removeCubes(entityIds: EntityId[]): void {
+    for (const id of entityIds) {
+      this.removeEntity(id);
+    }
+  }
+
   removeEntity(id: EntityId): void {
     if (!this.world) return;
 

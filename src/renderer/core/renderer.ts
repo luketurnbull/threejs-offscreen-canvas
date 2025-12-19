@@ -1,26 +1,26 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import type { ViewportSize } from "~/shared/types";
 import { config } from "~/shared/config";
 import type Debug from "../systems/debug";
 import type { DebugFolder } from "../systems/debug";
 
 /**
- * Renderer - WebGLRenderer wrapper
+ * Renderer - WebGPURenderer wrapper
  *
  * Responsible for:
- * - Creating and configuring THREE.WebGLRenderer
+ * - Creating and configuring THREE.WebGPURenderer
  * - Handling viewport resizing
  * - Rendering scene/camera pairs
  *
- * This is a thin wrapper that exposes the WebGLRenderer as `instance`
+ * This is a thin wrapper that exposes the WebGPURenderer as `instance`
  * for cases where direct access is needed.
  *
- * Note: Three.js WebGLRenderer accepts OffscreenCanvas natively since r128+.
+ * Note: WebGPU requires async initialization via init().
  * The type assertion is needed due to @types/three not including OffscreenCanvas
- * in the WebGLRendererParameters.canvas type definition.
+ * in the WebGPURendererParameters.canvas type definition.
  */
 class Renderer {
-  readonly instance: THREE.WebGLRenderer;
+  readonly instance: THREE.WebGPURenderer;
   private debugFolder: DebugFolder | null = null;
 
   // Debug state for color binding (needs to be an object property)
@@ -28,13 +28,16 @@ class Renderer {
     clearColor: config.renderer.clearColor,
   };
 
+  private debug: Debug | undefined;
+
   constructor(canvas: OffscreenCanvas, viewport: ViewportSize, debug?: Debug) {
-    // OffscreenCanvas is natively supported by Three.js WebGLRenderer
+    this.debug = debug;
+
+    // OffscreenCanvas is natively supported by Three.js WebGPURenderer
     // Type assertion needed due to incomplete @types/three definitions
-    this.instance = new THREE.WebGLRenderer({
+    this.instance = new THREE.WebGPURenderer({
       canvas: canvas as unknown as HTMLCanvasElement,
       antialias: true,
-      powerPreference: "high-performance",
     });
 
     // Tone mapping for realistic lighting
@@ -55,10 +58,18 @@ class Renderer {
     );
     this.instance.setPixelRatio(pixelRatio);
     this.instance.setSize(viewport.width, viewport.height, false);
+  }
 
-    // Setup debug controls
-    if (debug) {
-      this.addDebug(debug);
+  /**
+   * Initialize WebGPU - must be called before rendering
+   * WebGPU requires async initialization for adapter/device acquisition
+   */
+  async init(): Promise<void> {
+    await this.instance.init();
+
+    // Setup debug controls after init
+    if (this.debug) {
+      this.addDebug(this.debug);
     }
   }
 

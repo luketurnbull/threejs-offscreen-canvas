@@ -41,6 +41,8 @@ export default class WorkerBridge {
   private sharedBuffer!: SharedTransformBuffer;
 
   private playerId: EntityId | null = null;
+  private cubeEntityIds: EntityId[] = [];
+
   private currentInput: MovementInput = {
     forward: false,
     backward: false,
@@ -365,6 +367,76 @@ export default class WorkerBridge {
     await this.spawnDynamicSphere({ x: -3, y: 7, z: 0 }, 0.5, 0x4169e1);
     await this.spawnDynamicSphere({ x: -3, y: 9, z: 1 }, 0.4, 0x1e90ff);
     await this.spawnDynamicSphere({ x: -3, y: 8, z: -1 }, 0.6, 0x00bfff);
+  }
+
+  /**
+   * Spawn a storm of physics cubes for stress testing
+   * Uses InstancedMesh for efficient rendering
+   */
+  async spawnCubeStorm(
+    count: number,
+    spawnArea: { width: number; height: number; depth: number } = {
+      width: 20,
+      height: 30,
+      depth: 20,
+    },
+    cubeSize: number = 0.5,
+  ): Promise<EntityId[]> {
+    if (!this.physicsApi || !this.renderApi) {
+      throw new Error("Workers not initialized");
+    }
+
+    // Generate entity IDs and positions
+    const entityIds: EntityId[] = [];
+    const positions = new Float32Array(count * 3);
+
+    for (let i = 0; i < count; i++) {
+      const id = createEntityId();
+      entityIds.push(id);
+
+      // Random position in spawn area, centered above origin
+      positions[i * 3] = (Math.random() - 0.5) * spawnArea.width;
+      positions[i * 3 + 1] = 10 + Math.random() * spawnArea.height; // Above ground
+      positions[i * 3 + 2] = (Math.random() - 0.5) * spawnArea.depth;
+
+      // Register in shared buffer (main thread is source of truth)
+      this.sharedBuffer.registerEntity(id);
+    }
+
+    // Spawn physics bodies in batch
+    await this.physicsApi.spawnCubes(entityIds, positions, cubeSize);
+
+    // Spawn render instances
+    await this.renderApi.spawnCubes(entityIds, cubeSize);
+
+    // Track for cleanup
+    this.cubeEntityIds.push(...entityIds);
+
+    return entityIds;
+  }
+
+  /**
+   * Clear all spawned cubes
+   */
+  async clearCubes(): Promise<void> {
+    if (!this.physicsApi || !this.renderApi) return;
+    if (this.cubeEntityIds.length === 0) return;
+
+    // Remove from physics
+    await this.physicsApi.removeCubes(this.cubeEntityIds);
+
+    // Remove from render
+    await this.renderApi.removeCubes(this.cubeEntityIds);
+
+    // Clear tracking
+    this.cubeEntityIds = [];
+  }
+
+  /**
+   * Get current cube count
+   */
+  getCubeCount(): number {
+    return this.cubeEntityIds.length;
   }
 
   resize(viewport: ViewportSize): void {

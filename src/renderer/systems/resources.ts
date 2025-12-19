@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "three/webgpu";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { EventEmitter } from "~/shared/utils";
 import type { ResourceItem, Source } from "~/shared/types";
