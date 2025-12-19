@@ -39,6 +39,7 @@ export default class Debug {
   private bindings: Map<string, DebugBinding> = new Map();
   private targets: Map<string, { obj: DebugTarget; prop: string }> = new Map();
   private actions: Map<string, DebugActionHandler> = new Map();
+  private changeCallbacks: Map<string, DebugActionHandler> = new Map();
 
   // Stub UI for compatibility with existing World code
   ui: DebugUI | null;
@@ -70,6 +71,13 @@ export default class Debug {
   }
 
   /**
+   * Register a change callback for a binding
+   */
+  registerChangeCallback(id: string, handler: DebugActionHandler): void {
+    this.changeCallbacks.set(id, handler);
+  }
+
+  /**
    * Get all bindings for main thread
    */
   getBindings(): DebugBinding[] {
@@ -89,6 +97,12 @@ export default class Debug {
     const binding = this.bindings.get(event.id);
     if (binding) {
       binding.value = event.value;
+    }
+
+    // Call registered change callback
+    const callback = this.changeCallbacks.get(event.id);
+    if (callback) {
+      callback();
     }
   }
 
@@ -166,7 +180,7 @@ class DebugFolderImpl implements DebugFolder {
     this.debug.registerBinding(binding);
     this.debug.registerTarget(id, target, property);
 
-    return new DebugBindingHandle();
+    return new DebugBindingHandle(this.debug, id);
   }
 
   addButton(options: { title: string }): DebugButtonHandle {
@@ -189,8 +203,18 @@ class DebugFolderImpl implements DebugFolder {
 }
 
 class DebugBindingHandle {
-  on(_event: string, _callback: () => void): this {
-    // Change events are handled via main thread -> worker updates
+  private debug: Debug;
+  private id: string;
+
+  constructor(debug: Debug, id: string) {
+    this.debug = debug;
+    this.id = id;
+  }
+
+  on(event: string, callback: () => void): this {
+    if (event === "change") {
+      this.debug.registerChangeCallback(this.id, callback);
+    }
     return this;
   }
 }

@@ -32,7 +32,8 @@ export const config = {
   // Shadows
   shadows: {
     enabled: true,
-    mapSize: 1024,
+    mapSize: 4096, // High resolution shadow map
+    cameraSize: 15, // Half-size of shadow coverage (smaller = sharper shadows)
   },
 
   // Physics

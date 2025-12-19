@@ -211,6 +211,16 @@ class World {
 
     // Update physics debug visualization positions
     this.physicsDebugRenderer.update(this.entities);
+
+    // Update shadow camera to follow player
+    if (this.playerEntityId && this.sceneObjects.environment) {
+      const playerEntity = this.entities.get(this.playerEntityId);
+      if (playerEntity) {
+        this.sceneObjects.environment.updateShadowTarget(
+          playerEntity.object.position,
+        );
+      }
+    }
   }
 
   /**

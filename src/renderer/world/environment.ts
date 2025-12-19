@@ -8,6 +8,9 @@ export default class Environment {
   private scene: THREE.Scene;
   private debugFolder: DebugFolder | null = null;
 
+  // Light offset from target (maintains consistent shadow direction)
+  private lightOffset = new THREE.Vector3(20, 30, -15);
+
   sunLight: THREE.DirectionalLight;
   environmentMap: {
     intensity: number;
@@ -25,13 +28,30 @@ export default class Environment {
     // Add sun light
     this.sunLight = new THREE.DirectionalLight("#ffffff", 4);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.camera.far = 15;
+
+    // Shadow camera frustum - smaller = sharper shadows
+    // 4096 map / 30 units = ~136 pixels per unit (good quality)
+    const shadowCameraSize = config.shadows.cameraSize;
+    this.sunLight.shadow.camera.left = -shadowCameraSize;
+    this.sunLight.shadow.camera.right = shadowCameraSize;
+    this.sunLight.shadow.camera.top = shadowCameraSize;
+    this.sunLight.shadow.camera.bottom = -shadowCameraSize;
+    this.sunLight.shadow.camera.near = 0.1;
+    this.sunLight.shadow.camera.far = 100;
+
     this.sunLight.shadow.mapSize.set(
       config.shadows.mapSize,
       config.shadows.mapSize,
     );
     this.sunLight.shadow.normalBias = 0.05;
-    this.sunLight.position.set(3.5, 2, -1.25);
+
+    // Position light high and far for broad coverage
+    this.sunLight.position.copy(this.lightOffset);
+
+    // Add target for shadow to follow (will be updated each frame)
+    this.sunLight.target = new THREE.Object3D();
+    this.scene.add(this.sunLight.target);
+
     this.scene.add(this.sunLight);
 
     // Add environment map
@@ -41,15 +61,32 @@ export default class Environment {
     };
     this.environmentMap.texture.colorSpace = THREE.SRGBColorSpace;
     this.scene.environment = this.environmentMap.texture;
+    this.scene.environmentIntensity = this.environmentMap.intensity;
 
-    // Update materials
+    // Update existing materials
     this.updateMaterials();
 
     // Add debug
     this.addDebug();
   }
 
+  /**
+   * Update shadow camera to follow a target position
+   * Call this each frame with the player/camera target position
+   */
+  updateShadowTarget(targetPosition: THREE.Vector3): void {
+    // Move light to follow target, maintaining offset
+    this.sunLight.position.copy(targetPosition).add(this.lightOffset);
+
+    // Point light at target
+    this.sunLight.target.position.copy(targetPosition);
+  }
+
   updateMaterials() {
+    // Update global scene environment intensity (affects all PBR materials)
+    this.scene.environmentIntensity = this.environmentMap.intensity;
+
+    // Also update individual materials for any that override envMapIntensity
     this.scene.traverse((child) => {
       if (
         child instanceof THREE.Mesh &&
@@ -71,25 +108,25 @@ export default class Environment {
         step: 0.001,
       });
 
-      this.debugFolder.addBinding(this.sunLight.position, "x", {
-        label: "sunLightX",
-        min: -5,
-        max: 5,
-        step: 0.001,
+      this.debugFolder.addBinding(this.lightOffset, "x", {
+        label: "sunLightOffsetX",
+        min: -50,
+        max: 50,
+        step: 0.5,
       });
 
-      this.debugFolder.addBinding(this.sunLight.position, "y", {
-        label: "sunLightY",
-        min: -5,
-        max: 5,
-        step: 0.001,
+      this.debugFolder.addBinding(this.lightOffset, "y", {
+        label: "sunLightOffsetY",
+        min: 0,
+        max: 100,
+        step: 0.5,
       });
 
-      this.debugFolder.addBinding(this.sunLight.position, "z", {
-        label: "sunLightZ",
-        min: -5,
-        max: 5,
-        step: 0.001,
+      this.debugFolder.addBinding(this.lightOffset, "z", {
+        label: "sunLightOffsetZ",
+        min: -50,
+        max: 50,
+        step: 0.5,
       });
 
       this.debugFolder
