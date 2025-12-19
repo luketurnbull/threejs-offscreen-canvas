@@ -3,12 +3,13 @@ import type {
   EntityId,
   Transform,
   PhysicsBodyConfig,
-  CharacterControllerConfig,
+  FloatingCapsuleConfig,
   MovementInput,
 } from "~/shared/types";
 import type { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
-import CharacterController from "./character-controller";
+import { generateTerrainHeights } from "~/shared/utils";
+import FloatingCapsuleController from "./floating-capsule-controller";
 
 /**
  * PhysicsWorld - Rapier physics simulation
@@ -27,8 +28,8 @@ export default class PhysicsWorld {
   private colliders: Map<EntityId, RAPIER.Collider> = new Map();
   private entityIndices: Map<EntityId, number> = new Map();
 
-  // Character controller (extracted to separate class)
-  private characterController: CharacterController | null = null;
+  // Floating capsule controller (dynamic rigidbody-based)
+  private floatingController: FloatingCapsuleController | null = null;
   private playerId: EntityId | null = null;
 
   // Simulation loop
@@ -133,6 +134,33 @@ export default class PhysicsWorld {
           bodyConfig.radius ?? 0.5,
         );
         break;
+      case "heightfield": {
+        // Generate terrain heights deterministically from config
+        const terrainConfig = config.terrain;
+        const heights = generateTerrainHeights(terrainConfig);
+
+        // Rapier heightfield API:
+        // - nrows/ncols = number of subdivisions (segments)
+        // - heights array = (nrows+1) * (ncols+1) elements
+        // - scale = Vector for X-Z plane dimensions
+        const nrows = terrainConfig.segments;
+        const ncols = terrainConfig.segments;
+
+        // Create scale vector using Rapier's Vector type
+        const scale = new RAPIER.Vector3(
+          terrainConfig.size,
+          1,
+          terrainConfig.size,
+        );
+
+        colliderDesc = RAPIER.ColliderDesc.heightfield(
+          nrows,
+          ncols,
+          heights,
+          scale,
+        );
+        break;
+      }
       default:
         colliderDesc = RAPIER.ColliderDesc.cuboid(
           bodyConfig.dimensions.x / 2,
@@ -161,24 +189,24 @@ export default class PhysicsWorld {
     this.entityIndices.set(entityId, bufferIndex);
   }
 
-  spawnPlayer(
+  spawnFloatingPlayer(
     id: EntityId,
     transform: Transform,
-    controllerConfig: CharacterControllerConfig,
+    controllerConfig: FloatingCapsuleConfig,
   ): void {
     const { world, sharedBuffer } = this.ensureInitialized();
 
-    // Create character controller using the extracted class
-    this.characterController = new CharacterController(
+    // Create floating capsule controller (dynamic rigidbody-based)
+    this.floatingController = new FloatingCapsuleController(
       world,
       id,
       transform,
       controllerConfig,
     );
 
-    // Store references from the character controller
-    this.bodies.set(id, this.characterController.getBody());
-    this.colliders.set(id, this.characterController.getCollider());
+    // Store references from the floating controller
+    this.bodies.set(id, this.floatingController.getBody());
+    this.colliders.set(id, this.floatingController.getCollider());
     this.playerId = id;
 
     // Get buffer index from shared buffer (already registered by main thread)
@@ -200,12 +228,12 @@ export default class PhysicsWorld {
 
     if (this.playerId === id) {
       this.playerId = null;
-      this.characterController = null;
+      this.floatingController = null;
     }
   }
 
   setPlayerInput(input: MovementInput): void {
-    this.characterController?.setInput(input);
+    this.floatingController?.setInput(input);
   }
 
   start(): void {
@@ -236,8 +264,8 @@ export default class PhysicsWorld {
 
     const deltaSeconds = Math.min(deltaMs / 1000, 0.1);
 
-    // Update player movement via character controller
-    this.characterController?.update(deltaSeconds);
+    // Update player movement via floating capsule controller
+    this.floatingController?.update(deltaSeconds);
 
     // Step the physics world
     this.world.step(this.eventQueue);
@@ -301,7 +329,7 @@ export default class PhysicsWorld {
     this.bodies.clear();
     this.colliders.clear();
     this.entityIndices.clear();
-    this.characterController = null;
+    this.floatingController = null;
     this.playerId = null;
     this.world = null;
     this.eventQueue = null;

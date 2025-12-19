@@ -6,4 +6,4 @@
  */
 
 export { default as PhysicsWorld } from "./physics-world";
-export { default as CharacterController } from "./character-controller";
+export { default as FloatingCapsuleController } from "./floating-capsule-controller";

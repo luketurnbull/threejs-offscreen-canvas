@@ -48,21 +48,56 @@ export const config = {
     turnSpeed: 3,
   },
 
-  // Character controller (cuboid for quadruped fox)
-  // Fox at scale 0.02 is roughly 2 units long, 0.6 wide, 1 unit tall
-  characterController: {
-    halfWidth: 0.3, // X - side to side
-    halfHeight: 0.4, // Y - vertical (fox body height)
-    halfLength: 0.6, // Z - front to back (fox is longer than wide)
-    stepHeight: 0.2,
-    maxSlopeAngle: 45,
-    minSlopeSlideAngle: 30,
+  // Floating capsule controller (dynamic rigidbody with spring-damper hover)
+  // Inspired by Toyful Games' Very Very Valet and pmndrs/ecctrl
+  floatingCapsule: {
+    // Capsule dimensions
+    radius: 0.35,
+    halfHeight: 0.25,
+
+    // Floating spring-damper system
+    floatingDistance: 0.3, // Target hover distance from ground
+    rayLength: 0.8, // Ground detection ray length
+    springStrength: 1.2, // Spring constant (higher = snappier)
+    springDamping: 0.08, // Damping coefficient (higher = less bouncy)
+
+    // Movement forces
+    moveForce: 30, // Base movement force
+    sprintMultiplier: 1.8, // Sprint force multiplier
+    airControlMultiplier: 0.3, // Air control reduction
+    maxVelocity: 8, // Maximum horizontal velocity
+
+    // Jump
+    jumpForce: 8, // Impulse force for jump
+    coyoteTime: 150, // ms grace period after leaving ground
+    jumpBufferTime: 100, // ms to buffer jump input before landing
+
+    // Ground detection
+    groundedThreshold: 0.05, // Additional threshold for grounded state
+    slopeLimit: 50, // Max slope angle in degrees
+
+    // Physics properties
+    mass: 1,
+    friction: 0.0, // Low friction for smooth sliding
+    linearDamping: 0.5, // Air resistance
+    angularDamping: 1.0, // Prevent spinning
   },
 
-  // Ground plane
+  // Ground plane (legacy, replaced by terrain)
   ground: {
     dimensions: { x: 100, y: 1, z: 100 },
     position: { x: 0, y: -0.5, z: 0 },
+  },
+
+  // Terrain configuration
+  terrain: {
+    size: 100, // World units (X and Z)
+    segments: 128, // Grid resolution (128x128 = 16,641 vertices)
+    noiseScale: 0.02, // Frequency (lower = larger hills)
+    amplitude: 2.5, // Max height variation in units
+    octaves: 4, // Detail layers
+    persistence: 0.5, // Amplitude falloff per octave
+    seed: 42, // Deterministic seed for reproducible terrain
   },
 
   // Entity limits

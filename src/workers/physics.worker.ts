@@ -12,7 +12,7 @@ import type {
   EntityId,
   Transform,
   PhysicsBodyConfig,
-  CharacterControllerConfig,
+  FloatingCapsuleConfig,
   MovementInput,
   EntitySpawnData,
   SharedBuffers,
@@ -78,14 +78,18 @@ function createPhysicsApi(): PhysicsApi {
       );
     },
 
-    async spawnPlayer(
+    async spawnFloatingPlayer(
       id: EntityId,
       transform: Transform,
-      controllerConfig: CharacterControllerConfig,
+      controllerConfig: FloatingCapsuleConfig,
     ): Promise<void> {
       // Validate inputs at worker boundary
-      assertValidEntityId(id, "PhysicsApi.spawnPlayer");
-      assertPhysicsInitialized().spawnPlayer(id, transform, controllerConfig);
+      assertValidEntityId(id, "PhysicsApi.spawnFloatingPlayer");
+      assertPhysicsInitialized().spawnFloatingPlayer(
+        id,
+        transform,
+        controllerConfig,
+      );
     },
 
     removeEntity(id: EntityId): void {

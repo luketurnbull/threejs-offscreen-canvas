@@ -9,7 +9,7 @@ import type { EntityId, EntitySpawnData, Transform } from "./entity";
  */
 export interface PhysicsBodyConfig {
   type: "static" | "dynamic" | "kinematic";
-  colliderType: "cuboid" | "capsule" | "ball" | "trimesh";
+  colliderType: "cuboid" | "capsule" | "ball" | "trimesh" | "heightfield";
   dimensions: { x: number; y: number; z: number }; // For cuboid
   radius?: number; // For capsule/ball
   height?: number; // For capsule
@@ -40,24 +40,43 @@ export interface DebugCollider {
 }
 
 /**
- * Character controller configuration
+ * Floating capsule controller configuration
  *
- * Uses a cuboid (box) collider for quadruped characters.
- * The collider is offset so the body position represents the feet/bottom.
+ * Dynamic rigidbody-based controller using spring-damper forces to float above ground.
+ * Provides natural physics interactions with impulse-based movement.
+ * Inspired by Toyful Games' Very Very Valet and pmndrs/ecctrl.
  */
-export interface CharacterControllerConfig {
-  /** Half-width of the collider (X axis - side to side) */
-  halfWidth: number;
-  /** Half-height of the collider (Y axis - vertical) */
+export interface FloatingCapsuleConfig {
+  // Capsule dimensions
+  radius: number;
   halfHeight: number;
-  /** Half-length of the collider (Z axis - front to back) */
-  halfLength: number;
-  /** Maximum step height for auto-stepping */
-  stepHeight: number;
-  /** Maximum slope angle the character can climb (degrees) */
-  maxSlopeAngle: number;
-  /** Minimum slope angle where character starts sliding (degrees) */
-  minSlopeSlideAngle: number;
+
+  // Floating spring-damper system
+  floatingDistance: number;
+  rayLength: number;
+  springStrength: number;
+  springDamping: number;
+
+  // Movement
+  moveForce: number;
+  sprintMultiplier: number;
+  airControlMultiplier: number;
+  maxVelocity: number;
+
+  // Jump
+  jumpForce: number;
+  coyoteTime: number;
+  jumpBufferTime: number;
+
+  // Ground detection
+  groundedThreshold: number;
+  slopeLimit: number;
+
+  // Physics properties
+  mass: number;
+  friction: number;
+  linearDamping: number;
+  angularDamping: number;
 }
 
 /**
@@ -102,12 +121,12 @@ export interface PhysicsApi {
   ): Promise<void>;
 
   /**
-   * Spawn the player character with character controller
+   * Spawn the player character with floating capsule controller
    */
-  spawnPlayer(
+  spawnFloatingPlayer(
     id: EntityId,
     transform: Transform,
-    config: CharacterControllerConfig,
+    config: FloatingCapsuleConfig,
   ): Promise<void>;
 
   /**

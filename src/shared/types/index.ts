@@ -18,7 +18,7 @@ export type { RenderApi } from "./render-api";
 export type {
   PhysicsApi,
   PhysicsBodyConfig,
-  CharacterControllerConfig,
+  FloatingCapsuleConfig,
   MovementInput,
   SharedBuffers,
   DebugCollider,

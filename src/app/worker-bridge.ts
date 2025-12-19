@@ -258,10 +258,10 @@ export default class WorkerBridge {
   private async spawnWorld(): Promise<void> {
     if (!this.physicsApi || !this.renderApi) return;
 
-    // Create ground plane (static physics body)
+    // Create terrain ground (heightfield physics + visual mesh)
     const groundId = createEntityId();
     const groundTransform: Transform = {
-      position: config.ground.position,
+      position: { x: 0, y: 0, z: 0 }, // Heightfield is centered at origin
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
@@ -269,20 +269,21 @@ export default class WorkerBridge {
     // Register ground in shared buffer (main thread is the source of truth for entity IDs)
     this.sharedBuffer.registerEntity(groundId);
 
+    // Spawn physics with heightfield collider (terrain)
     await this.physicsApi.spawnEntity(
       { id: groundId, type: "static", transform: groundTransform },
       {
         type: "static",
-        colliderType: "cuboid",
-        dimensions: config.ground.dimensions,
+        colliderType: "heightfield",
+        dimensions: { x: config.terrain.size, y: 1, z: config.terrain.size },
         friction: 0.8,
       },
     );
 
-    // Create player (character controller)
+    // Create player (character controller) - spawn higher to account for terrain
     this.playerId = createEntityId();
     const playerTransform: Transform = {
-      position: { x: 0, y: 2, z: 0 },
+      position: { x: 0, y: 5, z: 0 }, // Spawn higher, will fall to terrain
       rotation: { x: 0, y: 0, z: 0, w: 1 },
       scale: { x: 1, y: 1, z: 1 },
     };
@@ -290,47 +291,44 @@ export default class WorkerBridge {
     // Register player in shared buffer
     this.sharedBuffer.registerEntity(this.playerId);
 
-    await this.physicsApi.spawnPlayer(this.playerId, playerTransform, {
-      halfWidth: config.characterController.halfWidth,
-      halfHeight: config.characterController.halfHeight,
-      halfLength: config.characterController.halfLength,
-      stepHeight: config.characterController.stepHeight,
-      maxSlopeAngle: config.characterController.maxSlopeAngle,
-      minSlopeSlideAngle: config.characterController.minSlopeSlideAngle,
+    await this.physicsApi.spawnFloatingPlayer(this.playerId, playerTransform, {
+      radius: config.floatingCapsule.radius,
+      halfHeight: config.floatingCapsule.halfHeight,
+      floatingDistance: config.floatingCapsule.floatingDistance,
+      rayLength: config.floatingCapsule.rayLength,
+      springStrength: config.floatingCapsule.springStrength,
+      springDamping: config.floatingCapsule.springDamping,
+      moveForce: config.floatingCapsule.moveForce,
+      sprintMultiplier: config.floatingCapsule.sprintMultiplier,
+      airControlMultiplier: config.floatingCapsule.airControlMultiplier,
+      maxVelocity: config.floatingCapsule.maxVelocity,
+      jumpForce: config.floatingCapsule.jumpForce,
+      coyoteTime: config.floatingCapsule.coyoteTime,
+      jumpBufferTime: config.floatingCapsule.jumpBufferTime,
+      groundedThreshold: config.floatingCapsule.groundedThreshold,
+      slopeLimit: config.floatingCapsule.slopeLimit,
+      mass: config.floatingCapsule.mass,
+      friction: config.floatingCapsule.friction,
+      linearDamping: config.floatingCapsule.linearDamping,
+      angularDamping: config.floatingCapsule.angularDamping,
     });
 
-    // Build debug colliders for visualization
-    const groundDebugCollider: DebugCollider = {
-      shape: {
-        type: "cuboid",
-        halfExtents: {
-          x: config.ground.dimensions.x / 2,
-          y: config.ground.dimensions.y / 2,
-          z: config.ground.dimensions.z / 2,
-        },
-      },
-    };
-
+    // Player debug collider for visualization (capsule)
+    const totalHalfHeight =
+      config.floatingCapsule.halfHeight + config.floatingCapsule.radius;
     const playerDebugCollider: DebugCollider = {
       shape: {
-        type: "cuboid",
-        halfExtents: {
-          x: config.characterController.halfWidth,
-          y: config.characterController.halfHeight,
-          z: config.characterController.halfLength,
-        },
+        type: "capsule",
+        radius: config.floatingCapsule.radius,
+        halfHeight: config.floatingCapsule.halfHeight,
       },
       // Offset to match physics collider (body position = feet, collider raised)
-      offset: { x: 0, y: config.characterController.halfHeight, z: 0 },
+      offset: { x: 0, y: totalHalfHeight, z: 0 },
     };
 
     // Spawn render entities for ground and player
-    await this.renderApi.spawnEntity(
-      groundId,
-      "ground",
-      undefined,
-      groundDebugCollider,
-    );
+    // Note: Ground has no debug collider (heightfield visualization is complex)
+    await this.renderApi.spawnEntity(groundId, "ground");
     await this.renderApi.spawnEntity(
       this.playerId,
       "player",
@@ -346,26 +344,26 @@ export default class WorkerBridge {
    * Spawn test dynamic objects to demonstrate physics sync
    */
   private async spawnTestObjects(): Promise<void> {
-    // Spawn a few dynamic boxes in a stack
+    // Spawn a few dynamic boxes - higher Y to account for terrain height
     await this.spawnDynamicBox(
-      { x: 3, y: 3, z: 0 },
+      { x: 3, y: 6, z: 0 },
       { x: 1, y: 1, z: 1 },
       0x8b4513,
     );
     await this.spawnDynamicBox(
-      { x: 3, y: 5, z: 0 },
+      { x: 3, y: 8, z: 0 },
       { x: 1, y: 1, z: 1 },
       0xa0522d,
     );
     await this.spawnDynamicBox(
-      { x: 3, y: 7, z: 0 },
+      { x: 3, y: 10, z: 0 },
       { x: 1, y: 1, z: 1 },
       0xcd853f,
     );
 
-    // Spawn a few dynamic spheres
-    await this.spawnDynamicSphere({ x: -3, y: 4, z: 0 }, 0.5, 0x4169e1);
-    await this.spawnDynamicSphere({ x: -3, y: 6, z: 1 }, 0.4, 0x1e90ff);
+    // Spawn a few dynamic spheres - higher Y to account for terrain height
+    await this.spawnDynamicSphere({ x: -3, y: 7, z: 0 }, 0.5, 0x4169e1);
+    await this.spawnDynamicSphere({ x: -3, y: 9, z: 1 }, 0.4, 0x1e90ff);
     await this.spawnDynamicSphere({ x: -3, y: 8, z: -1 }, 0.6, 0x00bfff);
   }
 
