@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type Resources from "../systems/resources";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 import { config } from "~/shared/config";
 
 /**
@@ -22,6 +24,7 @@ const ANIMATION_NAMES = {
  */
 export default class Fox {
   private scene: THREE.Scene;
+  private debugFolder: DebugFolder | null = null;
 
   resource: GLTF;
   model: THREE.Group;
@@ -34,7 +37,11 @@ export default class Fox {
     current: THREE.AnimationAction;
   };
 
-  constructor(scene: THREE.Scene, resources: Resources) {
+  // Debug-tunable parameters
+  speed: number = 1;
+  crossFadeDuration: number = config.animations.crossFadeDuration;
+
+  constructor(scene: THREE.Scene, resources: Resources, debug?: Debug) {
     this.scene = scene;
     this.resource = resources.items.foxModel as GLTF;
 
@@ -90,6 +97,47 @@ export default class Fox {
 
     // Play idle animation
     this.actions.current.play();
+
+    // Setup debug controls
+    if (debug) {
+      this.addDebug(debug);
+    }
+  }
+
+  private addDebug(debug: Debug): void {
+    if (!debug.active || !debug.ui) return;
+
+    this.debugFolder = debug.ui.addFolder({ title: "Animation" });
+
+    this.debugFolder
+      .addBinding(this, "speed", {
+        label: "Speed",
+        min: 0,
+        max: 3,
+        step: 0.1,
+      })
+      .on("change", () => {
+        this.mixer.timeScale = this.speed;
+      });
+
+    this.debugFolder.addBinding(this, "crossFadeDuration", {
+      label: "Cross Fade",
+      min: 0,
+      max: 2,
+      step: 0.05,
+    });
+
+    this.debugFolder.addButton({ title: "Play Idle" }).on("click", () => {
+      this.play("idle");
+    });
+
+    this.debugFolder.addButton({ title: "Play Walk" }).on("click", () => {
+      this.play("walking");
+    });
+
+    this.debugFolder.addButton({ title: "Play Run" }).on("click", () => {
+      this.play("running");
+    });
   }
 
   play(name: "idle" | "walking" | "running") {
@@ -98,16 +146,13 @@ export default class Fox {
 
     newAction.reset();
     newAction.play();
-    newAction.crossFadeFrom(
-      oldAction,
-      config.animations.crossFadeDuration,
-      false,
-    );
+    newAction.crossFadeFrom(oldAction, this.crossFadeDuration, false);
 
     this.actions.current = newAction;
   }
 
   dispose(): void {
+    this.debugFolder?.dispose();
     this.mixer.stopAllAction();
     this.scene.remove(this.model);
   }

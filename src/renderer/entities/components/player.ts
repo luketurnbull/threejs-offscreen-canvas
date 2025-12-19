@@ -20,7 +20,7 @@ export class PlayerEntity implements RenderComponent {
 
   constructor(id: EntityId, context: EntityContext) {
     this.id = id;
-    this.fox = new Fox(context.scene, context.resources);
+    this.fox = new Fox(context.scene, context.resources, context.debug);
     this.object = this.fox.model;
     this.mixer = this.fox.mixer;
   }

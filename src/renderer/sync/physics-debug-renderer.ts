@@ -5,6 +5,8 @@ import type {
   DebugColliderShape,
 } from "~/shared/types";
 import type { RenderComponent } from "../entities";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 import { config } from "~/shared/config";
 
 /**
@@ -17,6 +19,14 @@ class PhysicsDebugRenderer {
   private scene: THREE.Scene;
   private debugMeshes: Map<EntityId, THREE.Group> = new Map();
   private visible = false;
+  private debugFolder: DebugFolder | null = null;
+
+  // Debug state for UI binding
+  private debugState = {
+    color: `#${config.debug.colliderColor.toString(16).padStart(6, "0")}`,
+    opacity: config.debug.colliderOpacity,
+    wireframe: true,
+  };
 
   // Shared materials for all debug meshes
   private readonly debugMaterial = new THREE.MeshBasicMaterial({
@@ -26,8 +36,49 @@ class PhysicsDebugRenderer {
     opacity: config.debug.colliderOpacity,
   });
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, debug?: Debug) {
     this.scene = scene;
+
+    if (debug) {
+      this.addDebug(debug);
+    }
+  }
+
+  private addDebug(debug: Debug): void {
+    if (!debug.active || !debug.ui) return;
+
+    this.debugFolder = debug.ui.addFolder({ title: "Physics" });
+
+    this.debugFolder
+      .addBinding(this, "visible", { label: "Show Colliders" })
+      .on("change", () => {
+        for (const mesh of this.debugMeshes.values()) {
+          mesh.visible = this.visible;
+        }
+      });
+
+    this.debugFolder
+      .addBinding(this.debugState, "color", { label: "Collider Color" })
+      .on("change", () => {
+        this.debugMaterial.color.set(this.debugState.color);
+      });
+
+    this.debugFolder
+      .addBinding(this.debugState, "opacity", {
+        label: "Collider Opacity",
+        min: 0,
+        max: 1,
+        step: 0.05,
+      })
+      .on("change", () => {
+        this.debugMaterial.opacity = this.debugState.opacity;
+      });
+
+    this.debugFolder
+      .addBinding(this.debugState, "wireframe", { label: "Wireframe" })
+      .on("change", () => {
+        this.debugMaterial.wireframe = this.debugState.wireframe;
+      });
   }
 
   /**
@@ -152,6 +203,7 @@ class PhysicsDebugRenderer {
    * Dispose of all debug meshes and materials
    */
   dispose(): void {
+    this.debugFolder?.dispose();
     for (const group of this.debugMeshes.values()) {
       this.scene.remove(group);
       group.traverse((child) => {

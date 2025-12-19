@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { ViewportSize } from "~/shared/types";
 import { config } from "~/shared/config";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 
 export interface CameraOptions {
   fov?: number;
@@ -23,14 +25,15 @@ export interface CameraOptions {
  */
 export default class Camera {
   readonly instance: THREE.PerspectiveCamera;
+  private debugFolder: DebugFolder | null = null;
 
   private target: THREE.Object3D | null = null;
 
-  // Camera positioning for follow behavior
-  private distance: number;
-  private height: number;
-  private lookAtHeight: number;
-  private damping: number;
+  // Camera positioning for follow behavior (public for debug binding)
+  distance: number;
+  height: number;
+  lookAtHeight: number;
+  damping: number;
 
   // Internal state for smooth following
   private currentPosition = new THREE.Vector3();
@@ -45,6 +48,7 @@ export default class Camera {
     scene: THREE.Scene,
     viewport: ViewportSize,
     options: CameraOptions = {},
+    debug?: Debug,
   ) {
     // Create perspective camera using config defaults
     this.instance = new THREE.PerspectiveCamera(
@@ -65,6 +69,58 @@ export default class Camera {
     // Initialize current position to camera position
     this.currentPosition.copy(this.instance.position);
     this.currentLookAt.set(0, this.lookAtHeight, 0);
+
+    // Setup debug controls
+    if (debug) {
+      this.addDebug(debug);
+    }
+  }
+
+  private addDebug(debug: Debug): void {
+    if (!debug.active || !debug.ui) return;
+
+    this.debugFolder = debug.ui.addFolder({ title: "Camera" });
+
+    // FOV with change callback to update projection matrix
+    this.debugFolder
+      .addBinding(this.instance, "fov", {
+        label: "FOV",
+        min: 10,
+        max: 120,
+        step: 1,
+      })
+      .on("change", () => {
+        this.instance.updateProjectionMatrix();
+      });
+
+    // Follow camera settings
+    this.debugFolder.addBinding(this, "distance", {
+      label: "Distance",
+      min: 1,
+      max: 30,
+      step: 0.5,
+    });
+
+    this.debugFolder.addBinding(this, "height", {
+      label: "Height",
+      min: 0,
+      max: 20,
+      step: 0.5,
+    });
+
+    this.debugFolder.addBinding(this, "lookAtHeight", {
+      label: "Look At Height",
+      min: 0,
+      max: 5,
+      step: 0.1,
+    });
+
+    this.debugFolder.addBinding(this, "damping", {
+      label: "Damping",
+      min: 0.01,
+      max: 1,
+      step: 0.01,
+    });
   }
 
   /**
@@ -133,6 +189,7 @@ export default class Camera {
   }
 
   dispose(): void {
+    this.debugFolder?.dispose();
     this.target = null;
   }
 }

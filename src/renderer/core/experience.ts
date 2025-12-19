@@ -84,13 +84,18 @@ class Experience {
     this.inputState = new InputState();
 
     // Create rendering systems
-    this.camera = new Camera(this.scene, viewport, {
-      distance: config.camera.follow.distance,
-      height: config.camera.follow.height,
-      lookAtHeight: config.camera.follow.lookAtHeight,
-      damping: config.camera.follow.damping,
-    });
-    this.renderer = new Renderer(canvas, viewport);
+    this.camera = new Camera(
+      this.scene,
+      viewport,
+      {
+        distance: config.camera.follow.distance,
+        height: config.camera.follow.height,
+        lookAtHeight: config.camera.follow.lookAtHeight,
+        damping: config.camera.follow.damping,
+      },
+      this.debug,
+    );
+    this.renderer = new Renderer(canvas, viewport, this.debug);
     this.transformSync = new TransformSync(sharedBuffer);
 
     // Create world (entity + scene object manager)

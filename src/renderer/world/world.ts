@@ -15,7 +15,6 @@ import {
 
 // Scene objects (non-entity visuals)
 import Floor from "../objects/floor";
-import PlaneShader from "../objects/plane";
 import Environment from "./environment";
 import PhysicsDebugRenderer from "../sync/physics-debug-renderer";
 
@@ -56,13 +55,15 @@ class World {
   // Scene objects (non-entity visuals that don't need physics sync)
   private sceneObjects: {
     floor: Floor | null;
-    plane: PlaneShader | null;
     environment: Environment | null;
-  } = { floor: null, plane: null, environment: null };
+  } = { floor: null, environment: null };
 
   constructor(context: WorldContext) {
     this.context = context;
-    this.physicsDebugRenderer = new PhysicsDebugRenderer(context.scene);
+    this.physicsDebugRenderer = new PhysicsDebugRenderer(
+      context.scene,
+      context.debug,
+    );
   }
 
   /**
@@ -83,28 +84,8 @@ class World {
     this.entityFactory = new EntityFactory(entityContext);
 
     // Create non-entity scene objects
-    this.sceneObjects.floor = new Floor(scene, resources);
-    this.sceneObjects.plane = new PlaneShader(scene, time, debug);
+    this.sceneObjects.floor = new Floor(scene, resources, debug);
     this.sceneObjects.environment = new Environment(scene, resources, debug);
-
-    // Setup physics debug toggle in debug UI
-    this.setupPhysicsDebugUI();
-  }
-
-  // Physics debug state for UI binding (synced in update loop)
-  private physicsDebugState = { visible: false };
-
-  /**
-   * Setup physics debug controls in the debug UI
-   */
-  private setupPhysicsDebugUI(): void {
-    const { debug } = this.context;
-    if (!debug.active || !debug.ui) return;
-
-    const folder = debug.ui.addFolder({ title: "Physics" });
-    folder.addBinding(this.physicsDebugState, "visible", {
-      label: "Show Colliders",
-    });
   }
 
   /**
@@ -202,13 +183,6 @@ class World {
       }
     }
 
-    // Sync physics debug visibility from UI state
-    if (
-      this.physicsDebugState.visible !== this.physicsDebugRenderer.isVisible()
-    ) {
-      this.physicsDebugRenderer.setVisible(this.physicsDebugState.visible);
-    }
-
     // Update physics debug visualization positions
     this.physicsDebugRenderer.update(this.entities);
 
@@ -256,7 +230,6 @@ class World {
 
     // Dispose scene objects
     this.sceneObjects.floor?.dispose();
-    this.sceneObjects.plane?.dispose();
     this.sceneObjects.environment?.dispose();
 
     // Dispose physics debug renderer

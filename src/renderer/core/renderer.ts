@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { ViewportSize } from "~/shared/types";
 import { config } from "~/shared/config";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 
 /**
  * Renderer - WebGLRenderer wrapper
@@ -19,8 +21,14 @@ import { config } from "~/shared/config";
  */
 class Renderer {
   readonly instance: THREE.WebGLRenderer;
+  private debugFolder: DebugFolder | null = null;
 
-  constructor(canvas: OffscreenCanvas, viewport: ViewportSize) {
+  // Debug state for color binding (needs to be an object property)
+  private debugState = {
+    clearColor: config.renderer.clearColor,
+  };
+
+  constructor(canvas: OffscreenCanvas, viewport: ViewportSize, debug?: Debug) {
     // OffscreenCanvas is natively supported by Three.js WebGLRenderer
     // Type assertion needed due to incomplete @types/three definitions
     this.instance = new THREE.WebGLRenderer({
@@ -47,6 +55,39 @@ class Renderer {
     );
     this.instance.setPixelRatio(pixelRatio);
     this.instance.setSize(viewport.width, viewport.height, false);
+
+    // Setup debug controls
+    if (debug) {
+      this.addDebug(debug);
+    }
+  }
+
+  private addDebug(debug: Debug): void {
+    if (!debug.active || !debug.ui) return;
+
+    this.debugFolder = debug.ui.addFolder({ title: "Renderer" });
+
+    // Tone mapping exposure
+    this.debugFolder.addBinding(this.instance, "toneMappingExposure", {
+      label: "Exposure",
+      min: 0,
+      max: 3,
+      step: 0.01,
+    });
+
+    // Clear color (background)
+    this.debugFolder
+      .addBinding(this.debugState, "clearColor", {
+        label: "Clear Color",
+      })
+      .on("change", () => {
+        this.instance.setClearColor(this.debugState.clearColor);
+      });
+
+    // Shadow map toggle
+    this.debugFolder.addBinding(this.instance.shadowMap, "enabled", {
+      label: "Shadows",
+    });
   }
 
   resize(viewport: ViewportSize): void {
@@ -63,6 +104,7 @@ class Renderer {
   }
 
   dispose(): void {
+    this.debugFolder?.dispose();
     this.instance.dispose();
   }
 }

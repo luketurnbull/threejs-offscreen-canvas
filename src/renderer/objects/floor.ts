@@ -1,14 +1,20 @@
 import * as THREE from "three";
 import type Resources from "../systems/resources";
+import type Debug from "../systems/debug";
+import type { DebugFolder } from "../systems/debug";
 import { generateTerrainHeights } from "~/shared/utils";
 import { config } from "~/shared/config";
 
 export default class Floor {
   private scene: THREE.Scene;
+  private debugFolder: DebugFolder | null = null;
+  private colorTexture!: THREE.Texture;
+  private normalTexture!: THREE.Texture;
+
   mesh: THREE.Mesh;
   repeatRate: number = 10;
 
-  constructor(scene: THREE.Scene, resources: Resources) {
+  constructor(scene: THREE.Scene, resources: Resources, debug?: Debug) {
     this.scene = scene;
 
     const { size, segments } = config.terrain;
@@ -32,6 +38,31 @@ export default class Floor {
     this.mesh.receiveShadow = true;
 
     this.scene.add(this.mesh);
+
+    // Setup debug controls
+    if (debug) {
+      this.addDebug(debug);
+    }
+  }
+
+  private addDebug(debug: Debug): void {
+    if (!debug.active || !debug.ui) return;
+
+    this.debugFolder = debug.ui.addFolder({ title: "Floor" });
+
+    this.debugFolder
+      .addBinding(this, "repeatRate", {
+        label: "Texture Repeat",
+        min: 1,
+        max: 50,
+        step: 1,
+      })
+      .on("change", () => this.updateTextureRepeat());
+  }
+
+  private updateTextureRepeat(): void {
+    this.colorTexture.repeat.set(this.repeatRate, this.repeatRate);
+    this.normalTexture.repeat.set(this.repeatRate, this.repeatRate);
   }
 
   /**
@@ -68,24 +99,25 @@ export default class Floor {
   }
 
   createMaterial(resources: Resources) {
-    const colorTexture = resources.items.grassColorTexture as THREE.Texture;
-    colorTexture.colorSpace = THREE.SRGBColorSpace;
-    colorTexture.repeat.set(this.repeatRate, this.repeatRate);
-    colorTexture.wrapS = THREE.RepeatWrapping;
-    colorTexture.wrapT = THREE.RepeatWrapping;
+    this.colorTexture = resources.items.grassColorTexture as THREE.Texture;
+    this.colorTexture.colorSpace = THREE.SRGBColorSpace;
+    this.colorTexture.repeat.set(this.repeatRate, this.repeatRate);
+    this.colorTexture.wrapS = THREE.RepeatWrapping;
+    this.colorTexture.wrapT = THREE.RepeatWrapping;
 
-    const normalTexture = resources.items.grassNormalTexture as THREE.Texture;
-    normalTexture.repeat.set(this.repeatRate, this.repeatRate);
-    normalTexture.wrapS = THREE.RepeatWrapping;
-    normalTexture.wrapT = THREE.RepeatWrapping;
+    this.normalTexture = resources.items.grassNormalTexture as THREE.Texture;
+    this.normalTexture.repeat.set(this.repeatRate, this.repeatRate);
+    this.normalTexture.wrapS = THREE.RepeatWrapping;
+    this.normalTexture.wrapT = THREE.RepeatWrapping;
 
     return new THREE.MeshStandardMaterial({
-      map: colorTexture,
-      normalMap: normalTexture,
+      map: this.colorTexture,
+      normalMap: this.normalTexture,
     });
   }
 
   dispose(): void {
+    this.debugFolder?.dispose();
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
     this.scene.remove(this.mesh);

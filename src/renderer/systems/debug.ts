@@ -163,13 +163,32 @@ class DebugFolderImpl implements DebugFolder {
   ): DebugBindingHandle {
     const label = options?.label ?? property;
     const id = `${this.folder}:${label}`;
+    const value = target[property];
+
+    // Detect type from value
+    let type: "number" | "boolean" | "color" | "button";
+    if (typeof value === "boolean") {
+      type = "boolean";
+    } else if (typeof value === "string" && value.startsWith("#")) {
+      type = "color";
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      "r" in value &&
+      "g" in value &&
+      "b" in value
+    ) {
+      type = "color";
+    } else {
+      type = "number";
+    }
 
     const binding: DebugBinding = {
       id,
       folder: this.folder,
       label,
-      value: target[property],
-      type: typeof target[property] === "boolean" ? "boolean" : "number",
+      value,
+      type,
       options: {
         min: options?.min,
         max: options?.max,

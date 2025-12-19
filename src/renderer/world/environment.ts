@@ -11,6 +11,10 @@ export default class Environment {
   // Light offset from target (maintains consistent shadow direction)
   private lightOffset = new THREE.Vector3(20, 30, -15);
 
+  // Shadow settings (public for debug binding)
+  shadowCameraSize = config.shadows.cameraSize;
+  shadowNormalBias = 0.05;
+
   sunLight: THREE.DirectionalLight;
   environmentMap: {
     intensity: number;
@@ -31,19 +35,13 @@ export default class Environment {
 
     // Shadow camera frustum - smaller = sharper shadows
     // 4096 map / 30 units = ~136 pixels per unit (good quality)
-    const shadowCameraSize = config.shadows.cameraSize;
-    this.sunLight.shadow.camera.left = -shadowCameraSize;
-    this.sunLight.shadow.camera.right = shadowCameraSize;
-    this.sunLight.shadow.camera.top = shadowCameraSize;
-    this.sunLight.shadow.camera.bottom = -shadowCameraSize;
-    this.sunLight.shadow.camera.near = 0.1;
-    this.sunLight.shadow.camera.far = 100;
+    this.updateShadowCamera();
 
     this.sunLight.shadow.mapSize.set(
       config.shadows.mapSize,
       config.shadows.mapSize,
     );
-    this.sunLight.shadow.normalBias = 0.05;
+    this.sunLight.shadow.normalBias = this.shadowNormalBias;
 
     // Position light high and far for broad coverage
     this.sunLight.position.copy(this.lightOffset);
@@ -68,6 +66,19 @@ export default class Environment {
 
     // Add debug
     this.addDebug();
+  }
+
+  /**
+   * Update shadow camera frustum based on current settings
+   */
+  updateShadowCamera(): void {
+    this.sunLight.shadow.camera.left = -this.shadowCameraSize;
+    this.sunLight.shadow.camera.right = this.shadowCameraSize;
+    this.sunLight.shadow.camera.top = this.shadowCameraSize;
+    this.sunLight.shadow.camera.bottom = -this.shadowCameraSize;
+    this.sunLight.shadow.camera.near = 0.1;
+    this.sunLight.shadow.camera.far = 100;
+    this.sunLight.shadow.camera.updateProjectionMatrix();
   }
 
   /**
@@ -137,6 +148,27 @@ export default class Environment {
           step: 0.001,
         })
         .on("change", () => this.updateMaterials());
+
+      // Shadow controls
+      this.debugFolder
+        .addBinding(this, "shadowCameraSize", {
+          label: "Shadow Size",
+          min: 5,
+          max: 50,
+          step: 1,
+        })
+        .on("change", () => this.updateShadowCamera());
+
+      this.debugFolder
+        .addBinding(this, "shadowNormalBias", {
+          label: "Shadow Bias",
+          min: 0,
+          max: 0.1,
+          step: 0.001,
+        })
+        .on("change", () => {
+          this.sunLight.shadow.normalBias = this.shadowNormalBias;
+        });
     }
   }
 
