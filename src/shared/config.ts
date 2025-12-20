@@ -23,10 +23,18 @@ export const config = {
     // Follow camera settings
     follow: {
       distance: 10,
-      height: 5,
-      lookAtHeight: 1,
+      height: 4,
+      lookAtHeight: 1.5,
       damping: 0.1,
     },
+  },
+
+  // Fog
+  fog: {
+    enabled: true,
+    color: "#211d20", // Match clear color for seamless blend
+    near: 5,
+    far: 55,
   },
 
   // Shadows

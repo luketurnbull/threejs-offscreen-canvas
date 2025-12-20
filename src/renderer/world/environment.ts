@@ -9,11 +9,15 @@ export default class Environment {
   private debugFolder: DebugFolder | null = null;
 
   // Light offset from target (maintains consistent shadow direction)
-  private lightOffset = new THREE.Vector3(20, 30, -15);
+  private lightOffset = new THREE.Vector3(20, 5, -15);
 
   // Shadow settings (public for debug binding)
   shadowCameraSize = config.shadows.cameraSize;
   shadowNormalBias = 0.05;
+
+  // Fog settings (public for debug binding)
+  fogNear = config.fog.near;
+  fogFar = config.fog.far;
 
   sunLight: THREE.DirectionalLight;
   environmentMap: {
@@ -27,6 +31,15 @@ export default class Environment {
     // Create debug folder
     if (debug.active && debug.ui) {
       this.debugFolder = debug.ui.addFolder({ title: "Environment" });
+    }
+
+    // Add fog
+    if (config.fog.enabled) {
+      this.scene.fog = new THREE.Fog(
+        config.fog.color,
+        config.fog.near,
+        config.fog.far,
+      );
     }
 
     // Add sun light
@@ -169,6 +182,35 @@ export default class Environment {
         .on("change", () => {
           this.sunLight.shadow.normalBias = this.shadowNormalBias;
         });
+
+      // Fog controls
+      if (this.scene.fog instanceof THREE.Fog) {
+        this.debugFolder
+          .addBinding(this, "fogNear", {
+            label: "Fog Near",
+            min: 0,
+            max: 50,
+            step: 1,
+          })
+          .on("change", () => {
+            if (this.scene.fog instanceof THREE.Fog) {
+              this.scene.fog.near = this.fogNear;
+            }
+          });
+
+        this.debugFolder
+          .addBinding(this, "fogFar", {
+            label: "Fog Far",
+            min: 20,
+            max: 150,
+            step: 1,
+          })
+          .on("change", () => {
+            if (this.scene.fog instanceof THREE.Fog) {
+              this.scene.fog.far = this.fogFar;
+            }
+          });
+      }
     }
   }
 
