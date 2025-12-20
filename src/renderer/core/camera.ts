@@ -148,6 +148,19 @@ export default class Camera {
     this.instance.lookAt(this.currentLookAt);
   }
 
+  /**
+   * Extract Y rotation from quaternion directly
+   * Avoids potential Euler sync timing issues when quaternion is set by TransformSync
+   */
+  private getTargetYRotation(): number {
+    if (!this.target) return 0;
+    const q = this.target.quaternion;
+    return Math.atan2(
+      2 * (q.w * q.y + q.z * q.x),
+      1 - 2 * (q.x * q.x + q.y * q.y),
+    );
+  }
+
   private calculateIdealOffset(): void {
     if (!this.target) return;
 
@@ -155,8 +168,8 @@ export default class Camera {
     // Negative Z places camera behind the fox (fox faces +Z in local space)
     this.idealOffset.set(0, this.height, -this.distance);
 
-    // Rotate offset by target's Y rotation
-    this.idealOffset.applyAxisAngle(this.yAxis, this.target.rotation.y);
+    // Rotate offset by target's Y rotation (extracted directly from quaternion)
+    this.idealOffset.applyAxisAngle(this.yAxis, this.getTargetYRotation());
 
     // Add target position
     this.idealOffset.add(this.target.position);

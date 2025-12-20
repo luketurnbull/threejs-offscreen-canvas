@@ -144,6 +144,9 @@ export default class Fox {
     const newAction = this.actions[name];
     const oldAction = this.actions.current;
 
+    // Apply animation-specific playback speed
+    this.mixer.timeScale = config.animations.speeds[name];
+
     newAction.reset();
     newAction.play();
     newAction.crossFadeFrom(oldAction, this.crossFadeDuration, false);

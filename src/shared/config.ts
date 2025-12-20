@@ -66,7 +66,8 @@ export const config = {
     moveForce: 30, // Base movement force
     sprintMultiplier: 1.8, // Sprint force multiplier
     airControlMultiplier: 0.3, // Air control reduction
-    maxVelocity: 8, // Maximum horizontal velocity
+    maxVelocity: 8, // Maximum horizontal velocity (walking)
+    sprintMaxVelocity: 14, // Maximum horizontal velocity (sprinting)
 
     // Jump
     jumpForce: 8, // Impulse force for jump
@@ -110,6 +111,11 @@ export const config = {
   // Animation settings
   animations: {
     crossFadeDuration: 0.5,
+    speeds: {
+      idle: 1.0,
+      walking: 1.0,
+      running: 1.5, // Faster animation for running
+    },
   },
 
   // Resource loading

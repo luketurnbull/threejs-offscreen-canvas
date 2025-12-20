@@ -81,7 +81,8 @@ export default class FloatingCapsuleController {
       .setMass(controllerConfig.mass);
 
     // Offset collider so body position = feet position
-    const totalHalfHeight = controllerConfig.halfHeight + controllerConfig.radius;
+    const totalHalfHeight =
+      controllerConfig.halfHeight + controllerConfig.radius;
     colliderDesc.setTranslation(0, totalHalfHeight, 0);
 
     this.collider = world.createCollider(colliderDesc, this.body);
@@ -147,7 +148,8 @@ export default class FloatingCapsuleController {
     if (rayResult) {
       const hitDistance = rayResult.timeOfImpact;
       this.currentGroundDistance = hitDistance;
-      const threshold = this.config.floatingDistance + this.config.groundedThreshold;
+      const threshold =
+        this.config.floatingDistance + this.config.groundedThreshold;
 
       this.isGrounded = hitDistance <= threshold;
 
@@ -303,14 +305,19 @@ export default class FloatingCapsuleController {
   }
 
   /**
-   * Clamp horizontal velocity to max
+   * Clamp horizontal velocity to max (higher when sprinting)
    */
   private clampVelocity(): void {
     const vel = this.body.linvel();
     const horizontalSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
 
-    if (horizontalSpeed > this.config.maxVelocity) {
-      const scale = this.config.maxVelocity / horizontalSpeed;
+    // Use higher max velocity when sprinting
+    const maxVel = this.input.sprint
+      ? this.config.sprintMaxVelocity
+      : this.config.maxVelocity;
+
+    if (horizontalSpeed > maxVel) {
+      const scale = maxVel / horizontalSpeed;
       this.body.setLinvel(
         new RAPIER.Vector3(vel.x * scale, vel.y, vel.z * scale),
         true,

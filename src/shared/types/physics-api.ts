@@ -62,6 +62,7 @@ export interface FloatingCapsuleConfig {
   sprintMultiplier: number;
   airControlMultiplier: number;
   maxVelocity: number;
+  sprintMaxVelocity: number;
 
   // Jump
   jumpForce: number;

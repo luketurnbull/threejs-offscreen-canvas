@@ -304,6 +304,7 @@ export default class WorkerBridge {
       sprintMultiplier: config.floatingCapsule.sprintMultiplier,
       airControlMultiplier: config.floatingCapsule.airControlMultiplier,
       maxVelocity: config.floatingCapsule.maxVelocity,
+      sprintMaxVelocity: config.floatingCapsule.sprintMaxVelocity,
       jumpForce: config.floatingCapsule.jumpForce,
       coyoteTime: config.floatingCapsule.coyoteTime,
       jumpBufferTime: config.floatingCapsule.jumpBufferTime,
