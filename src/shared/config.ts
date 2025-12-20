@@ -42,7 +42,7 @@ export const config = {
     color: "#ffffff",
     intensity: 4,
     // Offset from follow target (maintains consistent shadow direction)
-    offset: { x: 20, y: 30, z: -15 },
+    offset: { x: 20, y: 4, z: -15 },
     // Shadow settings
     shadow: {
       enabled: true,
@@ -112,10 +112,10 @@ export const config = {
   terrain: {
     size: 100, // World units (X and Z)
     segments: 128, // Grid resolution (128x128 = 16,641 vertices)
-    noiseScale: 0.02, // Frequency (lower = larger hills)
-    amplitude: 2.5, // Max height variation in units
-    octaves: 4, // Detail layers
-    persistence: 0.5, // Amplitude falloff per octave
+    noiseScale: 0.015, // Frequency (lower = larger hills)
+    amplitude: 5, // Max height variation in units
+    octaves: 5, // Detail layers
+    persistence: 0.45, // Amplitude falloff per octave
     seed: 42, // Deterministic seed for reproducible terrain
   },
 
