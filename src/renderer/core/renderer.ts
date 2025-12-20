@@ -45,7 +45,7 @@ class Renderer {
     this.instance.toneMappingExposure = config.renderer.toneMappingExposure;
 
     // Shadow configuration
-    this.instance.shadowMap.enabled = config.shadows.enabled;
+    this.instance.shadowMap.enabled = config.sunLight.shadow.enabled;
     this.instance.shadowMap.type = THREE.PCFSoftShadowMap;
 
     // Background color

@@ -8,7 +8,7 @@
 export const config = {
   // Renderer
   renderer: {
-    clearColor: "#211d20",
+    clearColor: "#ffffff",
     toneMapping: "cineon" as const,
     toneMappingExposure: 1.75,
     maxPixelRatio: 2,
@@ -32,16 +32,31 @@ export const config = {
   // Fog
   fog: {
     enabled: true,
-    color: "#211d20", // Match clear color for seamless blend
-    near: 5,
-    far: 55,
+    color: "#ffffff",
+    near: 15,
+    far: 40,
   },
 
-  // Shadows
-  shadows: {
-    enabled: true,
-    mapSize: 4096, // High resolution shadow map
-    cameraSize: 15, // Half-size of shadow coverage (smaller = sharper shadows)
+  // Sun light (directional light with shadows)
+  sunLight: {
+    color: "#ffffff",
+    intensity: 4,
+    // Offset from follow target (maintains consistent shadow direction)
+    offset: { x: 20, y: 30, z: -15 },
+    // Shadow settings
+    shadow: {
+      enabled: true,
+      mapSize: 4096, // High resolution shadow map
+      cameraSize: 15, // Half-size of shadow coverage (smaller = sharper shadows)
+      normalBias: 0.05,
+      near: 0.1,
+      far: 100,
+    },
+  },
+
+  // Environment map
+  environmentMap: {
+    intensity: 0.4,
   },
 
   // Physics
