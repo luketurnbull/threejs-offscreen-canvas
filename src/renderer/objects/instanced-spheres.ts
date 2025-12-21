@@ -8,7 +8,6 @@ import type { EntityId } from "~/shared/types";
  * Each sphere's transform is synced from the physics worker via SharedArrayBuffer.
  *
  * Features:
- * - Per-instance colors via instanceColor attribute
  * - Per-instance radius via uniform scale
  * - O(1) swap-with-last removal (no fragmentation)
  */
@@ -40,48 +39,38 @@ export default class InstancedSpheres {
   private createMesh(): void {
     // Unit sphere (radius 0.5, diameter 1) - scale applied per-instance
     const geometry = new THREE.SphereGeometry(0.5, 16, 12);
-    const material = new THREE.MeshStandardMaterial({
+
+    const material = new THREE.MeshStandardNodeMaterial({
+      color: 0x4169e1, // Royal blue - matches default sphere color
       roughness: 0.6,
       metalness: 0.2,
     });
 
     this.mesh = new THREE.InstancedMesh(geometry, material, this.maxCount);
-    this.mesh.castShadow = true;
-    this.mesh.receiveShadow = true;
 
-    // Disable frustum culling - instances are scattered across a large area by physics
-    this.mesh.frustumCulled = false;
-
-    // Important: Use DynamicDrawUsage for frequently updated transforms
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Initialize all instances as invisible (scale 0)
+    // Initialize all instances with zero scale (invisible)
     const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < this.maxCount; i++) {
       this.mesh.setMatrixAt(i, zeroMatrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
 
-    // Initialize instance colors
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(
-      new Float32Array(this.maxCount * 3),
-      3,
-    );
-    (this.mesh.instanceColor as THREE.InstancedBufferAttribute).setUsage(
-      THREE.DynamicDrawUsage,
-    );
+    this.mesh.castShadow = true;
+    this.mesh.receiveShadow = true;
+
+    // Disable frustum culling - instances are scattered across a large area by physics
+    this.mesh.frustumCulled = false;
+
+    // Use DynamicDrawUsage for frequently updated data
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
     this.scene.add(this.mesh);
   }
 
   /**
-   * Add a single sphere with specified color and radius
+   * Add a single sphere with specified radius
    */
-  addSphere(
-    entityId: EntityId,
-    color: number,
-    radius: number = 0.5,
-  ): boolean {
+  addSphere(entityId: EntityId, radius: number = 0.5): boolean {
     if (!this.mesh) return false;
 
     if (this.activeCount >= this.maxCount) {
@@ -98,15 +87,7 @@ export default class InstancedSpheres {
     // Radius stored as scale factor (geometry has radius 0.5, so scale = radius * 2)
     this.entityRadii.set(entityId, radius * 2);
 
-    // Set color
-    const threeColor = new THREE.Color(color);
-    this.mesh.setColorAt(index, threeColor);
-
     this.activeCount++;
-
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return true;
   }
@@ -114,11 +95,7 @@ export default class InstancedSpheres {
   /**
    * Add multiple spheres in batch
    */
-  addSpheres(
-    entityIds: EntityId[],
-    colors: number[],
-    radii?: number[],
-  ): number {
+  addSpheres(entityIds: EntityId[], radii?: number[]): number {
     if (!this.mesh) return 0;
 
     const count = entityIds.length;
@@ -136,22 +113,14 @@ export default class InstancedSpheres {
     for (let i = 0; i < count; i++) {
       const id = entityIds[i];
       const index = startIndex + i;
-      const color = colors[i] ?? 0x4169e1; // Default royal blue
       const radius = radii?.[i] ?? 0.5;
 
       this.entityIds[index] = id;
       this.entityIndexMap.set(id, index);
       this.entityRadii.set(id, radius * 2);
-
-      const threeColor = new THREE.Color(color);
-      this.mesh.setColorAt(index, threeColor);
     }
 
     this.activeCount += count;
-
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return count;
   }
@@ -177,11 +146,6 @@ export default class InstancedSpheres {
       this.mesh.getMatrixAt(lastIndex, matrix);
       this.mesh.setMatrixAt(index, matrix);
 
-      // Copy color from last to removed slot
-      const color = new THREE.Color();
-      this.mesh.getColorAt(lastIndex, color);
-      this.mesh.setColorAt(index, color);
-
       // Update tracking for swapped entity
       this.entityIds[index] = lastEntityId;
       this.entityIndexMap.set(lastEntityId, index);
@@ -203,9 +167,6 @@ export default class InstancedSpheres {
     this.activeCount--;
 
     this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return true;
   }

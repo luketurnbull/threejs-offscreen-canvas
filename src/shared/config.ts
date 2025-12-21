@@ -124,6 +124,22 @@ export const config = {
     maxCount: 1000,
   },
 
+  // Entity spawner (click-to-spawn)
+  spawner: {
+    // Spawn position offset from camera
+    spawnOffset: 2, // meters in front of camera
+
+    // Projectile speed
+    projectileSpeed: 20, // m/s
+
+    // Size limits
+    minSize: 0.3, // Minimum size (smaller falls through terrain)
+    maxSize: 3.0, // Maximum size
+
+    // Default values
+    defaultSize: 1.0,
+  },
+
   // Buffer configuration
   buffers: {
     maxEntities: 1024, // Increased for instanced mesh stress testing

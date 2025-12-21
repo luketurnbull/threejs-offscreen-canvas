@@ -3,24 +3,23 @@
  *
  * Provides UI controls for:
  * - Shape selection (box/sphere)
- * - Color picker (native HTML5)
- * - Size slider (0.1 - 3.0)
+ * - Size slider
  *
  * Fixed position at bottom-left of screen.
  * Uses Shadow DOM for style isolation.
  */
 
+import { config } from "~/shared/config";
+
 export interface SpawnConfig {
   shape: "box" | "sphere";
-  color: number; // Hex color (e.g., 0x4a90d9)
-  size: number; // 0.1 - 3.0
+  size: number;
 }
 
 export class EntitySpawnerUI extends HTMLElement {
   private shadow: ShadowRoot;
   private selectedShape: "box" | "sphere" = "box";
-  private selectedColor: number = 0x4a90d9; // Nice blue default
-  private selectedSize: number = 1.0;
+  private selectedSize: number = config.spawner.defaultSize;
 
   constructor() {
     super();
@@ -104,43 +103,6 @@ export class EntitySpawnerUI extends HTMLElement {
           font-size: 16px;
         }
 
-        /* Color Picker */
-        .color-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .color-input {
-          width: 40px;
-          height: 40px;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          padding: 0;
-          background: none;
-        }
-
-        .color-input::-webkit-color-swatch-wrapper {
-          padding: 2px;
-        }
-
-        .color-input::-webkit-color-swatch {
-          border: 2px solid #444;
-          border-radius: 6px;
-        }
-
-        .color-input::-moz-color-swatch {
-          border: 2px solid #444;
-          border-radius: 6px;
-        }
-
-        .color-value {
-          font-family: monospace;
-          font-size: 13px;
-          color: #aaa;
-        }
-
         /* Size Slider */
         .size-row {
           display: flex;
@@ -217,18 +179,10 @@ export class EntitySpawnerUI extends HTMLElement {
         </div>
 
         <div class="section">
-          <div class="label">Color</div>
-          <div class="color-row">
-            <input type="color" class="color-input" value="#4a90d9">
-            <span class="color-value">#4a90d9</span>
-          </div>
-        </div>
-
-        <div class="section">
           <div class="label">Size</div>
           <div class="size-row">
-            <input type="range" class="size-slider" min="0.1" max="3.0" step="0.1" value="1.0">
-            <span class="size-value">1.0</span>
+            <input type="range" class="size-slider" min="${config.spawner.minSize}" max="${config.spawner.maxSize}" step="0.1" value="${config.spawner.defaultSize}">
+            <span class="size-value">${config.spawner.defaultSize.toFixed(1)}</span>
           </div>
         </div>
 
@@ -248,14 +202,6 @@ export class EntitySpawnerUI extends HTMLElement {
         const shape = btn.dataset.shape as "box" | "sphere";
         this.setShape(shape);
       });
-    });
-
-    // Color picker
-    const colorInput =
-      this.shadow.querySelector<HTMLInputElement>(".color-input");
-    colorInput?.addEventListener("input", (e) => {
-      const target = e.target as HTMLInputElement;
-      this.setColorFromHex(target.value);
     });
 
     // Size slider
@@ -278,17 +224,6 @@ export class EntitySpawnerUI extends HTMLElement {
     });
   }
 
-  private setColorFromHex(hexString: string): void {
-    // Convert #RRGGBB to 0xRRGGBB
-    this.selectedColor = parseInt(hexString.slice(1), 16);
-
-    // Update display
-    const colorValue = this.shadow.querySelector(".color-value");
-    if (colorValue) {
-      colorValue.textContent = hexString;
-    }
-  }
-
   private setSize(size: number): void {
     this.selectedSize = size;
 
@@ -305,7 +240,6 @@ export class EntitySpawnerUI extends HTMLElement {
   getSpawnConfig(): SpawnConfig {
     return {
       shape: this.selectedShape,
-      color: this.selectedColor,
       size: this.selectedSize,
     };
   }
@@ -318,26 +252,13 @@ export class EntitySpawnerUI extends HTMLElement {
   }
 
   /**
-   * Programmatically set the color (hex number, e.g., 0xff0000)
-   */
-  setSelectedColor(color: number): void {
-    this.selectedColor = color;
-
-    // Update input and display
-    const hexString = "#" + color.toString(16).padStart(6, "0");
-    const colorInput =
-      this.shadow.querySelector<HTMLInputElement>(".color-input");
-    const colorValue = this.shadow.querySelector(".color-value");
-
-    if (colorInput) colorInput.value = hexString;
-    if (colorValue) colorValue.textContent = hexString;
-  }
-
-  /**
    * Programmatically set the size
    */
   setSelectedSize(size: number): void {
-    this.selectedSize = Math.max(0.1, Math.min(3.0, size));
+    this.selectedSize = Math.max(
+      config.spawner.minSize,
+      Math.min(config.spawner.maxSize, size),
+    );
 
     // Update slider and display
     const sizeSlider =

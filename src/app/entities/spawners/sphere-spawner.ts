@@ -10,11 +10,7 @@ import type { PhysicsApi } from "~/shared/types/physics-api";
 import type { RenderApi } from "~/shared/types/render-api";
 import type { SharedTransformBuffer } from "~/shared/buffers/transform-buffer";
 import { createEntityId, type EntityId } from "~/shared/types";
-import {
-  DEFAULT_COLORS,
-  DEFAULT_SIZES,
-  type SpawnSphereCommand,
-} from "../types";
+import { DEFAULT_SIZES, type SpawnSphereCommand } from "../types";
 
 export default class SphereSpawner {
   private entityIds: Set<EntityId> = new Set();
@@ -38,7 +34,6 @@ export default class SphereSpawner {
   async spawn(command: SpawnSphereCommand): Promise<EntityId> {
     const entityId = command.entityId ?? createEntityId();
     const radius = command.radius ?? DEFAULT_SIZES.sphereRadius;
-    const color = command.color ?? DEFAULT_COLORS.sphere;
     const { position, velocity } = command;
 
     // Register in shared buffer
@@ -61,7 +56,7 @@ export default class SphereSpawner {
     );
 
     // Create render instance
-    await this.renderApi.addSphere(entityId, color, radius);
+    await this.renderApi.addSphere(entityId, radius);
 
     this.entityIds.add(entityId);
     return entityId;
@@ -74,7 +69,6 @@ export default class SphereSpawner {
     if (commands.length === 0) return [];
 
     const entityIds: EntityId[] = [];
-    const colors: number[] = [];
     const radii: number[] = [];
     const positions = new Float32Array(commands.length * 3);
 
@@ -82,10 +76,8 @@ export default class SphereSpawner {
       const command = commands[i];
       const entityId = command.entityId ?? createEntityId();
       const radius = command.radius ?? DEFAULT_SIZES.sphereRadius;
-      const color = command.color ?? DEFAULT_COLORS.sphere;
 
       entityIds.push(entityId);
-      colors.push(color);
       radii.push(radius);
 
       positions[i * 3] = command.position.x;
@@ -107,7 +99,7 @@ export default class SphereSpawner {
     });
 
     // Batch render spawn
-    await this.renderApi.addSpheres(entityIds, colors, radii);
+    await this.renderApi.addSpheres(entityIds, radii);
 
     return entityIds;
   }

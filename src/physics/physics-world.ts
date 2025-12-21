@@ -263,11 +263,15 @@ export default class PhysicsWorld {
       const y = positions[i * 3 + 1];
       const z = positions[i * 3 + 2];
 
-      // Create dynamic rigid body
+      // Check if this body has initial velocity (projectile)
+      const hasVelocity = velocities !== undefined;
+
+      // Create dynamic rigid body with CCD enabled for projectiles
       const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(x, y, z)
         .setLinearDamping(0.1)
-        .setAngularDamping(0.1);
+        .setAngularDamping(0.1)
+        .setCcdEnabled(hasVelocity); // Enable CCD for fast-moving projectiles
 
       const body = world.createRigidBody(bodyDesc);
 

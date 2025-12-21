@@ -210,11 +210,10 @@ class World {
    */
   addBox(
     entityId: EntityId,
-    color: number,
     scale?: { x: number; y: number; z: number },
   ): void {
     if (!this.instancedBoxes) return;
-    this.instancedBoxes.addBox(entityId, color, scale);
+    this.instancedBoxes.addBox(entityId, scale);
   }
 
   /**
@@ -222,11 +221,10 @@ class World {
    */
   addBoxes(
     entityIds: EntityId[],
-    colors: number[],
     scales?: Array<{ x: number; y: number; z: number }>,
   ): void {
     if (!this.instancedBoxes) return;
-    this.instancedBoxes.addBoxes(entityIds, colors, scales);
+    this.instancedBoxes.addBoxes(entityIds, scales);
   }
 
   /**
@@ -259,17 +257,17 @@ class World {
   /**
    * Add a single sphere to the instanced mesh
    */
-  addSphere(entityId: EntityId, color: number, radius?: number): void {
+  addSphere(entityId: EntityId, radius?: number): void {
     if (!this.instancedSpheres) return;
-    this.instancedSpheres.addSphere(entityId, color, radius);
+    this.instancedSpheres.addSphere(entityId, radius);
   }
 
   /**
    * Add multiple spheres to the instanced mesh
    */
-  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void {
+  addSpheres(entityIds: EntityId[], radii?: number[]): void {
     if (!this.instancedSpheres) return;
-    this.instancedSpheres.addSpheres(entityIds, colors, radii);
+    this.instancedSpheres.addSpheres(entityIds, radii);
   }
 
   /**
@@ -331,15 +329,8 @@ class World {
   spawnCubes(entityIds: EntityId[], size: number): void {
     if (!this.instancedBoxes) return;
 
-    // Generate random colors and uniform scales
-    const colors = entityIds.map(() => {
-      const hue = Math.random();
-      const color = new THREE.Color().setHSL(hue, 0.6, 0.5);
-      return color.getHex();
-    });
     const scales = entityIds.map(() => ({ x: size, y: size, z: size }));
-
-    this.instancedBoxes.addBoxes(entityIds, colors, scales);
+    this.instancedBoxes.addBoxes(entityIds, scales);
   }
 
   /**

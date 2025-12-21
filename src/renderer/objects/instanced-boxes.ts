@@ -8,7 +8,6 @@ import type { EntityId } from "~/shared/types";
  * Each box's transform is synced from the physics worker via SharedArrayBuffer.
  *
  * Features:
- * - Per-instance colors via instanceColor attribute
  * - Per-instance scale for different box sizes
  * - O(1) swap-with-last removal (no fragmentation)
  */
@@ -40,12 +39,22 @@ export default class InstancedBoxes {
   private createMesh(): void {
     // Unit box - scale applied per-instance via transform matrix
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({
+
+    const material = new THREE.MeshStandardNodeMaterial({
+      color: 0x8b4513, // Brown - matches default box color
       roughness: 0.7,
       metalness: 0.1,
     });
 
     this.mesh = new THREE.InstancedMesh(geometry, material, this.maxCount);
+
+    // Initialize all instances with zero scale (invisible)
+    const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < this.maxCount; i++) {
+      this.mesh.setMatrixAt(i, zeroMatrix);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
 
@@ -53,34 +62,17 @@ export default class InstancedBoxes {
     // but the base geometry's bounding sphere is tiny.
     this.mesh.frustumCulled = false;
 
-    // Important: Use DynamicDrawUsage for frequently updated transforms
+    // Use DynamicDrawUsage for frequently updated data
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    // Initialize all instances as invisible (scale 0)
-    const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
-    for (let i = 0; i < this.maxCount; i++) {
-      this.mesh.setMatrixAt(i, zeroMatrix);
-    }
-    this.mesh.instanceMatrix.needsUpdate = true;
-
-    // Initialize instance colors
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(
-      new Float32Array(this.maxCount * 3),
-      3,
-    );
-    (this.mesh.instanceColor as THREE.InstancedBufferAttribute).setUsage(
-      THREE.DynamicDrawUsage,
-    );
 
     this.scene.add(this.mesh);
   }
 
   /**
-   * Add a single box with specified color and scale
+   * Add a single box with specified scale
    */
   addBox(
     entityId: EntityId,
-    color: number,
     scale: { x: number; y: number; z: number } = { x: 1, y: 1, z: 1 },
   ): boolean {
     if (!this.mesh) return false;
@@ -96,17 +88,12 @@ export default class InstancedBoxes {
 
     this.entityIds[index] = entityId;
     this.entityIndexMap.set(entityId, index);
-    this.entityScales.set(entityId, new THREE.Vector3(scale.x, scale.y, scale.z));
-
-    // Set color
-    const threeColor = new THREE.Color(color);
-    this.mesh.setColorAt(index, threeColor);
+    this.entityScales.set(
+      entityId,
+      new THREE.Vector3(scale.x, scale.y, scale.z),
+    );
 
     this.activeCount++;
-
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return true;
   }
@@ -116,7 +103,6 @@ export default class InstancedBoxes {
    */
   addBoxes(
     entityIds: EntityId[],
-    colors: number[],
     scales?: Array<{ x: number; y: number; z: number }>,
   ): number {
     if (!this.mesh) return 0;
@@ -136,22 +122,14 @@ export default class InstancedBoxes {
     for (let i = 0; i < count; i++) {
       const id = entityIds[i];
       const index = startIndex + i;
-      const color = colors[i] ?? 0x8b4513; // Default brown
       const scale = scales?.[i] ?? { x: 1, y: 1, z: 1 };
 
       this.entityIds[index] = id;
       this.entityIndexMap.set(id, index);
       this.entityScales.set(id, new THREE.Vector3(scale.x, scale.y, scale.z));
-
-      const threeColor = new THREE.Color(color);
-      this.mesh.setColorAt(index, threeColor);
     }
 
     this.activeCount += count;
-
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return count;
   }
@@ -177,11 +155,6 @@ export default class InstancedBoxes {
       this.mesh.getMatrixAt(lastIndex, matrix);
       this.mesh.setMatrixAt(index, matrix);
 
-      // Copy color from last to removed slot
-      const color = new THREE.Color();
-      this.mesh.getColorAt(lastIndex, color);
-      this.mesh.setColorAt(index, color);
-
       // Update tracking for swapped entity
       this.entityIds[index] = lastEntityId;
       this.entityIndexMap.set(lastEntityId, index);
@@ -203,9 +176,6 @@ export default class InstancedBoxes {
     this.activeCount--;
 
     this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) {
-      this.mesh.instanceColor.needsUpdate = true;
-    }
 
     return true;
   }

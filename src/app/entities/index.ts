@@ -59,16 +59,16 @@ export default class EntityCoordinator {
   private async spawnInitialObjects(): Promise<void> {
     // Spawn dynamic boxes
     await this.boxSpawner.spawnBatch([
-      { position: { x: 3, y: 6, z: 0 }, color: 0x8b4513 },
-      { position: { x: 3, y: 8, z: 0 }, color: 0xa0522d },
-      { position: { x: 3, y: 10, z: 0 }, color: 0xcd853f },
+      { position: { x: 3, y: 6, z: 0 } },
+      { position: { x: 3, y: 8, z: 0 } },
+      { position: { x: 3, y: 10, z: 0 } },
     ]);
 
     // Spawn dynamic spheres
     await this.sphereSpawner.spawnBatch([
-      { position: { x: -3, y: 7, z: 0 }, radius: 0.5, color: 0x4169e1 },
-      { position: { x: -3, y: 9, z: 1 }, radius: 0.4, color: 0x1e90ff },
-      { position: { x: -3, y: 8, z: -1 }, radius: 0.6, color: 0x00bfff },
+      { position: { x: -3, y: 7, z: 0 }, radius: 0.5 },
+      { position: { x: -3, y: 9, z: 1 }, radius: 0.4 },
+      { position: { x: -3, y: 8, z: -1 }, radius: 0.6 },
     ]);
   }
 
@@ -87,7 +87,6 @@ export default class EntityCoordinator {
           y: 5 + Math.random() * 10,
           z: (Math.random() - 0.5) * 20,
         },
-        color: Math.random() * 0xffffff,
       });
     }
 
@@ -99,7 +98,6 @@ export default class EntityCoordinator {
           y: 5 + Math.random() * 10,
           z: (Math.random() - 0.5) * 20,
         },
-        color: Math.random() * 0xffffff,
       });
     }
 

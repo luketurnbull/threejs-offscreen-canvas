@@ -143,22 +143,20 @@ function createRenderApi(): RenderApi {
 
     addBox(
       entityId: EntityId,
-      color: number,
       scale?: { x: number; y: number; z: number },
     ): void {
       assertValidEntityId(entityId, "RenderApi.addBox");
-      assertExperienceInitialized().addBox(entityId, color, scale);
+      assertExperienceInitialized().addBox(entityId, scale);
     },
 
     addBoxes(
       entityIds: EntityId[],
-      colors: number[],
       scales?: Array<{ x: number; y: number; z: number }>,
     ): void {
       for (const id of entityIds) {
         assertValidEntityId(id, "RenderApi.addBoxes");
       }
-      assertExperienceInitialized().addBoxes(entityIds, colors, scales);
+      assertExperienceInitialized().addBoxes(entityIds, scales);
     },
 
     removeBoxes(entityIds: EntityId[]): void {
@@ -180,20 +178,16 @@ function createRenderApi(): RenderApi {
     // Instanced Spheres
     // ============================================
 
-    addSphere(entityId: EntityId, color: number, radius?: number): void {
+    addSphere(entityId: EntityId, radius?: number): void {
       assertValidEntityId(entityId, "RenderApi.addSphere");
-      assertExperienceInitialized().addSphere(entityId, color, radius);
+      assertExperienceInitialized().addSphere(entityId, radius);
     },
 
-    addSpheres(
-      entityIds: EntityId[],
-      colors: number[],
-      radii?: number[],
-    ): void {
+    addSpheres(entityIds: EntityId[], radii?: number[]): void {
       for (const id of entityIds) {
         assertValidEntityId(id, "RenderApi.addSpheres");
       }
-      assertExperienceInitialized().addSpheres(entityIds, colors, radii);
+      assertExperienceInitialized().addSpheres(entityIds, radii);
     },
 
     removeSpheres(entityIds: EntityId[]): void {

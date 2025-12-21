@@ -101,18 +101,13 @@ export interface RenderApi {
   /**
    * Add a single box to the instanced mesh
    */
-  addBox(
-    entityId: EntityId,
-    color: number,
-    scale?: { x: number; y: number; z: number },
-  ): void;
+  addBox(entityId: EntityId, scale?: { x: number; y: number; z: number }): void;
 
   /**
    * Add multiple boxes to the instanced mesh
    */
   addBoxes(
     entityIds: EntityId[],
-    colors: number[],
     scales?: Array<{ x: number; y: number; z: number }>,
   ): void;
 
@@ -138,12 +133,12 @@ export interface RenderApi {
   /**
    * Add a single sphere to the instanced mesh
    */
-  addSphere(entityId: EntityId, color: number, radius?: number): void;
+  addSphere(entityId: EntityId, radius?: number): void;
 
   /**
    * Add multiple spheres to the instanced mesh
    */
-  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void;
+  addSpheres(entityIds: EntityId[], radii?: number[]): void;
 
   /**
    * Remove spheres from the instanced mesh

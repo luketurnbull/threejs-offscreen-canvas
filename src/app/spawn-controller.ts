@@ -10,12 +10,9 @@
 
 import type { Remote } from "comlink";
 import type { RenderApi, SerializedClickEvent } from "~/shared/types";
+import { config } from "~/shared/config";
 import type { EntitySpawnerUI } from "./components/entity-spawner-ui";
 import type EntityCoordinator from "./entities";
-
-// Spawn configuration
-const SPAWN_OFFSET = 2; // meters in front of camera
-const PROJECTILE_SPEED = 20; // m/s
 
 export default class SpawnController {
   private ui: EntitySpawnerUI;
@@ -38,7 +35,7 @@ export default class SpawnController {
    */
   async handleClick(event: SerializedClickEvent): Promise<void> {
     // 1. Get spawn config from UI
-    const config = this.ui.getSpawnConfig();
+    const uiConfig = this.ui.getSpawnConfig();
 
     // 2. Raycast to get spawn position and direction
     const raycast = await this.renderApi.raycastGround(event.x, event.y);
@@ -47,32 +44,38 @@ export default class SpawnController {
       return;
     }
 
-    // 3. Calculate spawn position (near camera) and velocity (toward hit point)
+    // 3. Clamp size to prevent physics tunneling
+    const size = Math.max(
+      config.spawner.minSize,
+      Math.min(config.spawner.maxSize, uiConfig.size),
+    );
+
+    // 4. Calculate spawn position (near camera) and velocity (toward hit point)
+    const spawnOffset = config.spawner.spawnOffset;
     const spawnPos = {
-      x: raycast.origin.x + raycast.direction.x * SPAWN_OFFSET,
-      y: raycast.origin.y + raycast.direction.y * SPAWN_OFFSET,
-      z: raycast.origin.z + raycast.direction.z * SPAWN_OFFSET,
+      x: raycast.origin.x + raycast.direction.x * spawnOffset,
+      y: raycast.origin.y + raycast.direction.y * spawnOffset,
+      z: raycast.origin.z + raycast.direction.z * spawnOffset,
     };
 
+    const speed = config.spawner.projectileSpeed;
     const velocity = {
-      x: raycast.direction.x * PROJECTILE_SPEED,
-      y: raycast.direction.y * PROJECTILE_SPEED,
-      z: raycast.direction.z * PROJECTILE_SPEED,
+      x: raycast.direction.x * speed,
+      y: raycast.direction.y * speed,
+      z: raycast.direction.z * speed,
     };
 
-    // 4. Spawn entity with velocity
-    if (config.shape === "box") {
+    // 5. Spawn entity with velocity
+    if (uiConfig.shape === "box") {
       await this.entities.spawnBox({
         position: spawnPos,
-        size: { x: config.size, y: config.size, z: config.size },
-        color: config.color,
+        size: { x: size, y: size, z: size },
         velocity,
       });
     } else {
       await this.entities.spawnSphere({
         position: spawnPos,
-        radius: config.size,
-        color: config.color,
+        radius: size,
         velocity,
       });
     }

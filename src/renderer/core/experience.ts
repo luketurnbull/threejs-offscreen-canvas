@@ -22,6 +22,7 @@ import Time from "../systems/time";
 import Debug from "../systems/debug";
 import Resources from "../systems/resources";
 import InputState from "../systems/input-state";
+import GroundRaycaster from "../systems/ground-raycaster";
 import sources from "../systems/sources";
 
 // Sync
@@ -60,8 +61,7 @@ class Experience {
   private unsubscribeTick: (() => void) | null = null;
 
   // Raycasting
-  private groundPlane: THREE.Plane;
-  private raycaster: THREE.Raycaster;
+  private groundRaycaster: GroundRaycaster;
 
   // Callbacks
   private onProgress: ((progress: number) => void) | null = null;
@@ -87,9 +87,8 @@ class Experience {
     // Create scene
     this.scene = new THREE.Scene();
 
-    // Initialize raycasting (invisible ground plane at Y=0)
-    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    this.raycaster = new THREE.Raycaster();
+    // Initialize raycasting system
+    this.groundRaycaster = new GroundRaycaster();
 
     // Initialize core systems
     this.time = new Time();
@@ -242,29 +241,11 @@ class Experience {
     normalizedX: number,
     normalizedY: number,
   ): RaycastResult | null {
-    // Convert normalized coords (0-1) to NDC (-1 to 1)
-    const ndc = new THREE.Vector2(
-      normalizedX * 2 - 1,
-      -(normalizedY * 2 - 1), // Y inverted (screen Y goes down, NDC Y goes up)
+    return this.groundRaycaster.raycastGround(
+      normalizedX,
+      normalizedY,
+      this.camera.instance,
     );
-
-    // Set ray from camera through the NDC point
-    this.raycaster.setFromCamera(ndc, this.camera.instance);
-
-    // Intersect with ground plane
-    const target = new THREE.Vector3();
-    const hit = this.raycaster.ray.intersectPlane(this.groundPlane, target);
-
-    if (!hit) return null;
-
-    const origin = this.camera.instance.position;
-    const direction = this.raycaster.ray.direction;
-
-    return {
-      point: { x: target.x, y: target.y, z: target.z },
-      origin: { x: origin.x, y: origin.y, z: origin.z },
-      direction: { x: direction.x, y: direction.y, z: direction.z },
-    };
   }
 
   // ============================================
@@ -328,19 +309,17 @@ class Experience {
 
   addBox(
     entityId: EntityId,
-    color: number,
     scale?: { x: number; y: number; z: number },
   ): void {
-    this.world.addBox(entityId, color, scale);
+    this.world.addBox(entityId, scale);
     this.transformSync.rebuildEntityMap();
   }
 
   addBoxes(
     entityIds: EntityId[],
-    colors: number[],
     scales?: Array<{ x: number; y: number; z: number }>,
   ): void {
-    this.world.addBoxes(entityIds, colors, scales);
+    this.world.addBoxes(entityIds, scales);
     this.transformSync.rebuildEntityMap();
   }
 
@@ -360,13 +339,13 @@ class Experience {
   // Instanced Spheres
   // ============================================
 
-  addSphere(entityId: EntityId, color: number, radius?: number): void {
-    this.world.addSphere(entityId, color, radius);
+  addSphere(entityId: EntityId, radius?: number): void {
+    this.world.addSphere(entityId, radius);
     this.transformSync.rebuildEntityMap();
   }
 
-  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void {
-    this.world.addSpheres(entityIds, colors, radii);
+  addSpheres(entityIds: EntityId[], radii?: number[]): void {
+    this.world.addSpheres(entityIds, radii);
     this.transformSync.rebuildEntityMap();
   }
 
@@ -448,6 +427,7 @@ class Experience {
     this.camera.dispose();
     this.renderer.dispose();
     this.debug.dispose();
+    this.groundRaycaster.dispose();
   }
 }
 

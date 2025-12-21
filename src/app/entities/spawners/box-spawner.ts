@@ -10,7 +10,7 @@ import type { PhysicsApi } from "~/shared/types/physics-api";
 import type { RenderApi } from "~/shared/types/render-api";
 import type { SharedTransformBuffer } from "~/shared/buffers/transform-buffer";
 import { createEntityId, type EntityId } from "~/shared/types";
-import { DEFAULT_COLORS, DEFAULT_SIZES, type SpawnBoxCommand } from "../types";
+import { DEFAULT_SIZES, type SpawnBoxCommand } from "../types";
 
 export default class BoxSpawner {
   private entityIds: Set<EntityId> = new Set();
@@ -34,7 +34,6 @@ export default class BoxSpawner {
   async spawn(command: SpawnBoxCommand): Promise<EntityId> {
     const entityId = command.entityId ?? createEntityId();
     const size = command.size ?? DEFAULT_SIZES.box;
-    const color = command.color ?? DEFAULT_COLORS.box;
     const { position, velocity } = command;
 
     // Register in shared buffer
@@ -57,7 +56,7 @@ export default class BoxSpawner {
     );
 
     // Create render instance
-    await this.renderApi.addBox(entityId, color, size);
+    await this.renderApi.addBox(entityId, size);
 
     this.entityIds.add(entityId);
     return entityId;
@@ -70,7 +69,6 @@ export default class BoxSpawner {
     if (commands.length === 0) return [];
 
     const entityIds: EntityId[] = [];
-    const colors: number[] = [];
     const scales: Array<{ x: number; y: number; z: number }> = [];
     const positions = new Float32Array(commands.length * 3);
 
@@ -78,10 +76,8 @@ export default class BoxSpawner {
       const command = commands[i];
       const entityId = command.entityId ?? createEntityId();
       const size = command.size ?? DEFAULT_SIZES.box;
-      const color = command.color ?? DEFAULT_COLORS.box;
 
       entityIds.push(entityId);
-      colors.push(color);
       scales.push(size);
 
       positions[i * 3] = command.position.x;
@@ -100,7 +96,7 @@ export default class BoxSpawner {
     });
 
     // Batch render spawn
-    await this.renderApi.addBoxes(entityIds, colors, scales);
+    await this.renderApi.addBoxes(entityIds, scales);
 
     return entityIds;
   }
