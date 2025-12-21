@@ -75,12 +75,12 @@ await entities.initWorld();
 
 // Batch spawning (uses InstancedMesh for performance)
 await entities.spawnBoxes([
-  { position: { x: 0, y: 5, z: 0 }, color: 0xff0000 },
-  { position: { x: 1, y: 5, z: 0 }, color: 0x00ff00 },
+  { position: { x: 0, y: 5, z: 0 } },
+  { position: { x: 1, y: 5, z: 0 }, size: { x: 1.5, y: 1.5, z: 1.5 } },
 ]);
 
 await entities.spawnSpheres([
-  { position: { x: -2, y: 5, z: 0 }, radius: 0.5, color: 0x0000ff },
+  { position: { x: -2, y: 5, z: 0 }, radius: 0.5 },
 ]);
 
 // Clear all dynamic entities
@@ -661,7 +661,7 @@ EntityCoordinator (Main Thread)
     │     ├── physicsApi.spawnBodies(entityIds, positions, config)
     │     │   └── Creates Rapier RigidBodies for each entity
     │     │
-    │     └── renderApi.addBoxes/addSpheres(entityIds, colors, scales)
+    │     └── renderApi.addBoxes/addSpheres(entityIds, scales/radii)
     │         └── World.addBoxes/addSpheres()
     │             └── InstancedBoxes/InstancedSpheres
 ```
@@ -671,9 +671,6 @@ EntityCoordinator (Main Thread)
 Both `InstancedBoxes` and `InstancedSpheres` share the same pattern:
 
 ```typescript
-// Per-instance colors via instanceColor attribute
-mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
-
 // Per-instance scale via transform matrix
 const matrix = new THREE.Matrix4();
 matrix.compose(position, quaternion, scale);
@@ -704,7 +701,7 @@ Access via `#debug` URL hash:
 ### Performance Characteristics
 
 - **2 draw calls** for all boxes + spheres (1 per type)
-- Per-instance colors and scales
+- Per-instance scales
 - O(1) instance removal (swap-with-last pattern)
 - Zero-copy transform sync via SharedArrayBuffer
 - Physics runs at fixed 60Hz, rendering at display refresh rate

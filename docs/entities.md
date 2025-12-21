@@ -70,8 +70,8 @@ const boxSpawner = new BoxSpawner(physicsApi, renderApi, sharedBuffer);
 
 // Spawn 500 boxes in one batch
 await boxSpawner.spawnBatch([
-  { position: { x: 0, y: 5, z: 0 }, color: 0xff0000 },
-  { position: { x: 1, y: 5, z: 0 }, color: 0x00ff00 },
+  { position: { x: 0, y: 5, z: 0 } },
+  { position: { x: 1, y: 5, z: 0 }, size: { x: 1.5, y: 1.5, z: 1.5 } },
   // ... 498 more
 ]);
 ```
@@ -79,7 +79,7 @@ await boxSpawner.spawnBatch([
 Benefits:
 - **1 draw call** for all boxes (vs N draw calls)
 - **O(1) removal** via swap-with-last pattern
-- **Per-instance colors** and scales
+- **Per-instance scales** for different sizes
 - **GPU instancing** for transforms
 
 ## Directory Structure
