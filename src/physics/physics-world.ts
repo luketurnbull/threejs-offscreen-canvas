@@ -242,11 +242,13 @@ export default class PhysicsWorld {
   /**
    * Spawn multiple physics bodies at once (boxes or spheres)
    * Entity IDs must already be registered in the shared buffer
+   * @param velocities Optional initial velocities (3 floats per entity: vx, vy, vz)
    */
   spawnBodies(
     entityIds: EntityId[],
     positions: Float32Array,
     bodyConfig: BatchBodyConfig,
+    velocities?: Float32Array,
   ): void {
     const { world, sharedBuffer } = this.ensureInitialized();
 
@@ -268,6 +270,14 @@ export default class PhysicsWorld {
         .setAngularDamping(0.1);
 
       const body = world.createRigidBody(bodyDesc);
+
+      // Apply initial velocity if provided
+      if (velocities) {
+        const vx = velocities[i * 3];
+        const vy = velocities[i * 3 + 1];
+        const vz = velocities[i * 3 + 2];
+        body.setLinvel({ x: vx, y: vy, z: vz }, true);
+      }
 
       // Create collider based on type
       let colliderDesc: RAPIER.ColliderDesc;

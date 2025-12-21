@@ -7,13 +7,23 @@
 import type { EntityId } from "~/shared/types";
 
 /**
+ * 3D vector for positions and velocities
+ */
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
  * Command to spawn a box entity
  */
 export interface SpawnBoxCommand {
   entityId?: EntityId; // Optional - auto-generate if not provided
-  position: { x: number; y: number; z: number };
-  size?: { x: number; y: number; z: number }; // Default 1x1x1
+  position: Vec3;
+  size?: Vec3; // Default 1x1x1
   color?: number; // Default brown (0x8b4513)
+  velocity?: Vec3; // Optional initial velocity
 }
 
 /**
@@ -21,9 +31,10 @@ export interface SpawnBoxCommand {
  */
 export interface SpawnSphereCommand {
   entityId?: EntityId; // Optional - auto-generate if not provided
-  position: { x: number; y: number; z: number };
+  position: Vec3;
   radius?: number; // Default 0.5
   color?: number; // Default blue (0x4169e1)
+  velocity?: Vec3; // Optional initial velocity
 }
 
 /**

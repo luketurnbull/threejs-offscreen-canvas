@@ -9,6 +9,7 @@ import * as Comlink from "comlink";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import type {
   RenderApi,
+  RaycastResult,
   ViewportSize,
   SerializedInputEvent,
   DebugBinding,
@@ -241,6 +242,14 @@ function createRenderApi(): RenderApi {
         assertValidEntityId(id, "RenderApi.removeCubes");
       }
       assertExperienceInitialized().removeCubes(entityIds);
+    },
+
+    // ============================================
+    // Raycasting
+    // ============================================
+
+    raycastGround(x: number, y: number): RaycastResult | null {
+      return assertExperienceInitialized().raycastGround(x, y);
     },
 
     // ============================================

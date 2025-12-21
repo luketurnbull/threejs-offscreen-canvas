@@ -8,6 +8,22 @@ import type { EntityId } from "./entity";
 import type { SharedBuffers, DebugCollider } from "./physics-api";
 import type { FootstepCallback, ListenerCallback } from "./audio-events";
 
+// ============================================
+// Raycasting Types
+// ============================================
+
+/**
+ * Result from a raycast operation
+ */
+export interface RaycastResult {
+  /** Hit point on the target (ground plane) */
+  point: { x: number; y: number; z: number };
+  /** Camera position (ray origin) */
+  origin: { x: number; y: number; z: number };
+  /** Ray direction (normalized) */
+  direction: { x: number; y: number; z: number };
+}
+
 /**
  * Render Worker API - exposed via Comlink
  */
@@ -196,4 +212,17 @@ export interface RenderApi {
    * Called each frame with camera position/orientation
    */
   setListenerCallback(callback: ListenerCallback): void;
+
+  // ============================================
+  // Raycasting
+  // ============================================
+
+  /**
+   * Raycast from screen coordinates to invisible ground plane at Y=0
+   * Used for click-to-spawn mechanics
+   * @param x Normalized screen X (0-1, left to right)
+   * @param y Normalized screen Y (0-1, top to bottom)
+   * @returns Hit info including point, camera origin, and ray direction, or null if no hit
+   */
+  raycastGround(x: number, y: number): RaycastResult | null;
 }

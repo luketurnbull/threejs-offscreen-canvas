@@ -8,6 +8,7 @@ import type {
   DebugCollider,
   FootstepCallback,
   ListenerCallback,
+  RaycastResult,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
@@ -58,6 +59,10 @@ class Experience {
 
   private unsubscribeTick: (() => void) | null = null;
 
+  // Raycasting
+  private groundPlane: THREE.Plane;
+  private raycaster: THREE.Raycaster;
+
   // Callbacks
   private onProgress: ((progress: number) => void) | null = null;
   private onReady: (() => void) | null = null;
@@ -81,6 +86,10 @@ class Experience {
 
     // Create scene
     this.scene = new THREE.Scene();
+
+    // Initialize raycasting (invisible ground plane at Y=0)
+    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    this.raycaster = new THREE.Raycaster();
 
     // Initialize core systems
     this.time = new Time();
@@ -216,6 +225,46 @@ class Experience {
 
   triggerDebugAction(id: string): void {
     this.debug.triggerAction(id);
+  }
+
+  // ============================================
+  // Raycasting
+  // ============================================
+
+  /**
+   * Raycast from screen coordinates to invisible ground plane at Y=0
+   * Used for click-to-spawn mechanics
+   * @param normalizedX Normalized screen X (0-1, left to right)
+   * @param normalizedY Normalized screen Y (0-1, top to bottom)
+   * @returns Hit info including point, camera origin, and ray direction, or null if no hit
+   */
+  raycastGround(
+    normalizedX: number,
+    normalizedY: number,
+  ): RaycastResult | null {
+    // Convert normalized coords (0-1) to NDC (-1 to 1)
+    const ndc = new THREE.Vector2(
+      normalizedX * 2 - 1,
+      -(normalizedY * 2 - 1), // Y inverted (screen Y goes down, NDC Y goes up)
+    );
+
+    // Set ray from camera through the NDC point
+    this.raycaster.setFromCamera(ndc, this.camera.instance);
+
+    // Intersect with ground plane
+    const target = new THREE.Vector3();
+    const hit = this.raycaster.ray.intersectPlane(this.groundPlane, target);
+
+    if (!hit) return null;
+
+    const origin = this.camera.instance.position;
+    const direction = this.raycaster.ray.direction;
+
+    return {
+      point: { x: target.x, y: target.y, z: target.z },
+      origin: { x: origin.x, y: origin.y, z: origin.z },
+      direction: { x: direction.x, y: direction.y, z: direction.z },
+    };
   }
 
   // ============================================

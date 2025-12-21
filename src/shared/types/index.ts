@@ -5,6 +5,7 @@ export type {
   DebugUpdateEvent,
   ElementBounds,
   InputEventType,
+  SerializedClickEvent,
   SerializedInputEvent,
   SerializedKeyboardEvent,
   ViewportSize,
@@ -14,7 +15,7 @@ export type {
 export type { Loader, ResourceItem, Source, SourceType } from "./resources";
 
 // Worker APIs
-export type { RenderApi } from "./render-api";
+export type { RenderApi, RaycastResult } from "./render-api";
 export type {
   PhysicsApi,
   PhysicsBodyConfig,

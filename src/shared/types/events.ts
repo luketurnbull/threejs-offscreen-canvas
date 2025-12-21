@@ -14,9 +14,17 @@ export interface SerializedKeyboardEvent {
   repeat: boolean;
 }
 
-// Currently only keyboard events are used for player movement.
-// Pointer/wheel events can be added here when needed (e.g., camera orbit).
-export type SerializedInputEvent = SerializedKeyboardEvent;
+export interface SerializedClickEvent {
+  type: "click";
+  /** Normalized screen X (0-1, left to right) */
+  x: number;
+  /** Normalized screen Y (0-1, top to bottom) */
+  y: number;
+}
+
+export type SerializedInputEvent =
+  | SerializedKeyboardEvent
+  | SerializedClickEvent;
 
 // ============================================
 // Viewport / Sizing

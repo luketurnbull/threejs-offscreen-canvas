@@ -39,17 +39,26 @@ export default class SphereSpawner {
     const entityId = command.entityId ?? createEntityId();
     const radius = command.radius ?? DEFAULT_SIZES.sphereRadius;
     const color = command.color ?? DEFAULT_COLORS.sphere;
-    const { position } = command;
+    const { position, velocity } = command;
 
     // Register in shared buffer
     this.sharedBuffer.registerEntity(entityId);
 
     // Create physics body
     const positions = new Float32Array([position.x, position.y, position.z]);
-    await this.physicsApi.spawnBodies([entityId], positions, {
-      type: "sphere",
-      radius,
-    });
+    const velocities = velocity
+      ? new Float32Array([velocity.x, velocity.y, velocity.z])
+      : undefined;
+
+    await this.physicsApi.spawnBodies(
+      [entityId],
+      positions,
+      {
+        type: "sphere",
+        radius,
+      },
+      velocities,
+    );
 
     // Create render instance
     await this.renderApi.addSphere(entityId, color, radius);

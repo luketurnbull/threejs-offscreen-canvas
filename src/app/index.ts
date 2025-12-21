@@ -6,8 +6,10 @@ import WorkerCoordinator from "./worker-coordinator";
 import EntityCoordinator from "./entities";
 import InputRouter from "./input-router";
 import AudioBridge from "./audio-bridge";
+import SpawnController from "./spawn-controller";
 import { ErrorOverlay } from "./components/error-overlay";
 import { LoadingScreen } from "./components/loading-screen";
+import { EntitySpawnerUI } from "./components/entity-spawner-ui";
 
 /**
  * App - Main thread orchestrator
@@ -28,9 +30,12 @@ export default class App {
   private entities: EntityCoordinator | null = null;
   private inputRouter: InputRouter | null = null;
   private audioBridge: AudioBridge;
+  private spawnController: SpawnController | null = null;
 
+  // UI components
   private errorOverlay: ErrorOverlay | null = null;
   private loadingScreen: LoadingScreen | null = null;
+  private spawnerUI: EntitySpawnerUI | null = null;
 
   private resizeObserver: ResizeObserver | null = null;
   private pixelRatioMediaQuery: MediaQueryList | null = null;
@@ -124,6 +129,15 @@ export default class App {
     this.entities = new EntityCoordinator(physicsApi, renderApi, sharedBuffer);
     this.inputRouter = new InputRouter(physicsApi, renderApi);
 
+    // Create spawner UI and controller
+    this.spawnerUI = new EntitySpawnerUI();
+    document.body.appendChild(this.spawnerUI);
+    this.spawnController = new SpawnController(
+      this.spawnerUI,
+      this.entities,
+      renderApi,
+    );
+
     // Wire up audio callbacks
     this.audioBridge.setupCallbacks(physicsApi, renderApi);
 
@@ -175,6 +189,11 @@ export default class App {
     // Input events -> InputRouter
     this.input.setEventCallback((event) => {
       this.inputRouter?.handleInput(event);
+    });
+
+    // Click events -> SpawnController
+    this.input.setClickCallback((event) => {
+      this.spawnController?.handleClick(event);
     });
 
     // Resize handling
@@ -266,9 +285,11 @@ export default class App {
   }
 
   dispose(): void {
-    // Clean up error overlay
+    // Clean up UI components
     this.errorOverlay?.remove();
     this.errorOverlay = null;
+    this.spawnerUI?.remove();
+    this.spawnerUI = null;
 
     // Clean up pixel ratio listener
     if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
@@ -285,11 +306,13 @@ export default class App {
     this.debug.dispose();
 
     // Dispose modular components
+    this.spawnController?.dispose();
     this.inputRouter?.dispose();
     this.entities?.dispose();
     this.audioBridge.dispose();
     this.coordinator.dispose();
 
+    this.spawnController = null;
     this.inputRouter = null;
     this.entities = null;
     this._initialized = false;

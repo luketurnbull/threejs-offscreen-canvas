@@ -35,17 +35,26 @@ export default class BoxSpawner {
     const entityId = command.entityId ?? createEntityId();
     const size = command.size ?? DEFAULT_SIZES.box;
     const color = command.color ?? DEFAULT_COLORS.box;
-    const { position } = command;
+    const { position, velocity } = command;
 
     // Register in shared buffer
     this.sharedBuffer.registerEntity(entityId);
 
     // Create physics body
     const positions = new Float32Array([position.x, position.y, position.z]);
-    await this.physicsApi.spawnBodies([entityId], positions, {
-      type: "box",
-      size: Math.max(size.x, size.y, size.z), // Use largest dimension for physics
-    });
+    const velocities = velocity
+      ? new Float32Array([velocity.x, velocity.y, velocity.z])
+      : undefined;
+
+    await this.physicsApi.spawnBodies(
+      [entityId],
+      positions,
+      {
+        type: "box",
+        size: Math.max(size.x, size.y, size.z), // Use largest dimension for physics
+      },
+      velocities,
+    );
 
     // Create render instance
     await this.renderApi.addBox(entityId, color, size);

@@ -106,11 +106,17 @@ function createPhysicsApi(): PhysicsApi {
       entityIds: EntityId[],
       positions: Float32Array,
       config: BatchBodyConfig,
+      velocities?: Float32Array,
     ): Promise<void> {
       for (const id of entityIds) {
         assertValidEntityId(id, "PhysicsApi.spawnBodies");
       }
-      assertPhysicsInitialized().spawnBodies(entityIds, positions, config);
+      assertPhysicsInitialized().spawnBodies(
+        entityIds,
+        positions,
+        config,
+        velocities,
+      );
     },
 
     async removeBodies(entityIds: EntityId[]): Promise<void> {
