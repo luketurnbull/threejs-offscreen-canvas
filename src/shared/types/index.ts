@@ -33,3 +33,18 @@ export type {
   Transform,
 } from "./entity";
 export { createEntityId } from "./entity";
+
+// Audio Events
+export type {
+  FootstepEvent,
+  CollisionEvent,
+  JumpEvent,
+  LandEvent,
+  ListenerUpdate,
+  PhysicsAudioEvent,
+  RenderAudioEvent,
+  CollisionCallback,
+  PlayerStateCallback,
+  FootstepCallback,
+  ListenerCallback,
+} from "./audio-events";

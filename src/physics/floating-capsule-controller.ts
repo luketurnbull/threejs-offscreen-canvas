@@ -4,6 +4,7 @@ import type {
   Transform,
   FloatingCapsuleConfig,
   MovementInput,
+  PlayerStateCallback,
 } from "~/shared/types";
 import { config } from "~/shared/config";
 
@@ -40,10 +41,15 @@ export default class FloatingCapsuleController {
 
   // Ground detection state
   private isGrounded = false;
+  private wasGrounded = false;
   private lastGroundedTime = 0;
   private jumpBufferedTime = 0;
   private hasJumped = false;
   private currentGroundDistance = 0;
+  private lastVerticalVelocity = 0;
+
+  // Audio callback for jump/land events
+  private playerStateCallback: PlayerStateCallback | null = null;
 
   // Movement settings from config
   private readonly turnSpeed = config.player.turnSpeed;
@@ -87,6 +93,9 @@ export default class FloatingCapsuleController {
 
     this.collider = world.createCollider(colliderDesc, this.body);
 
+    // Enable collision events for audio (player collisions with objects)
+    this.collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+
     // Initialize rotation from transform
     this.rotationY = this.quaternionToYRotation(transform.rotation);
   }
@@ -99,31 +108,87 @@ export default class FloatingCapsuleController {
   }
 
   /**
+   * Set callback for player state events (jump/land)
+   */
+  setPlayerStateCallback(callback: PlayerStateCallback): void {
+    this.playerStateCallback = callback;
+  }
+
+  /**
    * Main update - called each physics step
    */
   update(deltaSeconds: number): void {
     const now = performance.now();
+    const vel = this.body.linvel();
 
     // 1. Ground detection via raycast
     this.detectGround();
 
-    // 2. Handle jump input buffering
+    // 2. Detect landing (was airborne, now grounded)
+    if (this.isGrounded && !this.wasGrounded) {
+      this.emitLandEvent();
+    }
+
+    // 3. Handle jump input buffering
     this.handleJumpBuffer(now);
 
-    // 3. Apply floating force (spring-damper)
+    // 4. Apply floating force (spring-damper)
     this.applyFloatingForce();
 
-    // 4. Apply movement forces
+    // 5. Apply movement forces
     this.applyMovementForces();
 
-    // 5. Handle jump
+    // 6. Handle jump
     this.handleJump(now);
 
-    // 6. Apply rotation
+    // 7. Apply rotation
     this.applyRotation(deltaSeconds);
 
-    // 7. Clamp velocity
+    // 8. Clamp velocity
     this.clampVelocity();
+
+    // Update state for next frame
+    this.wasGrounded = this.isGrounded;
+    this.lastVerticalVelocity = vel.y;
+  }
+
+  /**
+   * Emit landing event for audio
+   */
+  private emitLandEvent(): void {
+    if (!this.playerStateCallback) return;
+
+    const pos = this.body.translation();
+    // Calculate intensity based on how fast we were falling
+    const fallSpeed = Math.abs(this.lastVerticalVelocity);
+    const intensity = Math.min(
+      fallSpeed / config.audio.player.landIntensityThreshold,
+      1.0,
+    );
+
+    // Only emit if we had significant falling velocity
+    if (fallSpeed > 0.5) {
+      this.playerStateCallback({
+        type: "land",
+        entityId: this.entityId,
+        position: { x: pos.x, y: pos.y, z: pos.z },
+        intensity,
+      });
+    }
+  }
+
+  /**
+   * Emit jump event for audio
+   */
+  private emitJumpEvent(): void {
+    if (!this.playerStateCallback) return;
+
+    const pos = this.body.translation();
+    this.playerStateCallback({
+      type: "jump",
+      entityId: this.entityId,
+      position: { x: pos.x, y: pos.y, z: pos.z },
+    });
   }
 
   /**
@@ -265,6 +330,9 @@ export default class FloatingCapsuleController {
       this.hasJumped = true;
       this.jumpBufferedTime = 0;
       this.isGrounded = false;
+
+      // Emit jump audio event
+      this.emitJumpEvent();
     }
   }
 

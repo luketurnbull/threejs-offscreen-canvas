@@ -1,5 +1,5 @@
 import * as THREE from "three/webgpu";
-import type { EntityId, DebugCollider } from "~/shared/types";
+import type { EntityId, DebugCollider, FootstepCallback } from "~/shared/types";
 import type Resources from "../systems/resources";
 import type Time from "../systems/time";
 import type Debug from "../systems/debug";
@@ -13,6 +13,7 @@ import {
   type RenderComponent,
   type EntityContext,
 } from "../entities";
+import { PlayerEntity } from "../entities/components/player";
 
 // Scene objects (non-entity visuals)
 import Floor from "../objects/floor";
@@ -64,6 +65,9 @@ class World {
     floor: Floor | null;
     environment: Environment | null;
   } = { floor: null, environment: null };
+
+  // Audio callback for footsteps
+  private footstepCallback: FootstepCallback | null = null;
 
   constructor(context: WorldContext) {
     this.context = context;
@@ -129,6 +133,26 @@ class World {
     if (type === "player") {
       this.playerEntityId = id;
       this.context.camera.setTarget(entity.object);
+
+      // Pass footstep callback to player entity
+      if (this.footstepCallback && entity instanceof PlayerEntity) {
+        entity.setFootstepCallback(this.footstepCallback);
+      }
+    }
+  }
+
+  /**
+   * Set callback for footstep events
+   */
+  setFootstepCallback(callback: FootstepCallback): void {
+    this.footstepCallback = callback;
+
+    // If player already exists, update its callback
+    if (this.playerEntityId) {
+      const playerEntity = this.entities.get(this.playerEntityId);
+      if (playerEntity && playerEntity instanceof PlayerEntity) {
+        playerEntity.setFootstepCallback(callback);
+      }
     }
   }
 

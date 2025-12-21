@@ -1,4 +1,5 @@
 import type { EntityId, EntitySpawnData, Transform } from "./entity";
+import type { CollisionCallback, PlayerStateCallback } from "./audio-events";
 
 // ============================================
 // Physics Worker API - exposed via Comlink
@@ -175,4 +176,20 @@ export interface PhysicsApi {
    * Clean up and dispose
    */
   dispose(): void;
+
+  // ============================================
+  // Audio Event Callbacks
+  // ============================================
+
+  /**
+   * Set callback for collision events (for audio)
+   * Called when significant physics collisions occur
+   */
+  setCollisionCallback(callback: CollisionCallback): void;
+
+  /**
+   * Set callback for player state events (jump/land)
+   * Called when player jumps or lands
+   */
+  setPlayerStateCallback(callback: PlayerStateCallback): void;
 }

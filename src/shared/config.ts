@@ -151,6 +151,34 @@ export const config = {
     colliderColor: 0x00ff00,
     colliderOpacity: 0.5,
   },
+
+  // Audio system
+  audio: {
+    master: {
+      volume: 1.0,
+    },
+    footsteps: {
+      volume: 0.4,
+      walkInterval: 400, // ms between footsteps when walking
+      runInterval: 250, // ms between footsteps when running
+      poolSize: 4, // Number of audio sources for overlapping sounds
+    },
+    collisions: {
+      volume: 0.8,
+      minImpulse: 2.0, // Minimum impulse to trigger sound (filters rolling)
+      poolSize: 8,
+    },
+    player: {
+      jumpVolume: 0.5,
+      landVolume: 0.6,
+      landIntensityThreshold: 2.0, // Fall speed for max volume landing
+    },
+    spatial: {
+      refDistance: 5, // Distance at which volume is full
+      maxDistance: 50, // Distance beyond which sound is inaudible
+      rolloffFactor: 1,
+    },
+  },
 } as const;
 
 export type Config = typeof config;

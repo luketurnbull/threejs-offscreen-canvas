@@ -4,6 +4,7 @@ import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
 import WorkerBridge from "./worker-bridge";
 import { ErrorOverlay } from "./components/error-overlay";
+import { LoadingScreen } from "./components/loading-screen";
 
 /**
  * App - Main thread orchestrator
@@ -17,6 +18,7 @@ export default class App {
   private debug: DebugManager;
   private bridge: WorkerBridge;
   private errorOverlay: ErrorOverlay | null = null;
+  private loadingScreen: LoadingScreen | null = null;
 
   private resizeObserver: ResizeObserver | null = null;
   private pixelRatioMediaQuery: MediaQueryList | null = null;
@@ -48,8 +50,22 @@ export default class App {
     this.debug = new DebugManager();
     this.bridge = new WorkerBridge();
 
+    // Show loading screen
+    this.showLoadingScreen();
+
     // Start initialization
     this.init();
+  }
+
+  private showLoadingScreen(): void {
+    this.loadingScreen = new LoadingScreen();
+
+    // Set up start button callback to unlock audio
+    this.loadingScreen.setOnStart(() => {
+      this.bridge.unlockAudio();
+    });
+
+    document.body.appendChild(this.loadingScreen);
   }
 
   private async init(): Promise<void> {
@@ -74,7 +90,8 @@ export default class App {
         this.handleLoadProgress(progress);
       },
       onReady: () => {
-        // Resources loaded, scene objects created (but entities not yet spawned)
+        // Resources loaded, show start button
+        this.loadingScreen?.showStartButton();
       },
       onFrameTiming: (deltaMs: number) => {
         this.debug.updateFrameTiming(deltaMs);
@@ -176,10 +193,13 @@ export default class App {
     this.bridge.resize(viewport);
   }
 
-  private handleLoadProgress(_progress: number): void {
-    // Loading progress can be used for UI updates
-    // Currently handled silently - add loading UI here if needed
-    console.log("Loading progress:", _progress);
+  private handleLoadProgress(progress: number): void {
+    // Update loading screen with progress
+    const percentage = Math.round(progress * 100);
+    this.loadingScreen?.setProgress(
+      progress,
+      `Loading assets... ${percentage}%`,
+    );
   }
 
   private startStatsLoop(): void {

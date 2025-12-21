@@ -16,6 +16,8 @@ import type {
   EntityId,
   SharedBuffers,
   DebugCollider,
+  FootstepCallback,
+  ListenerCallback,
 } from "~/shared/types";
 import {
   assertInitialized,
@@ -149,6 +151,14 @@ function createRenderApi(): RenderApi {
     dispose(): void {
       experience?.dispose();
       experience = null;
+    },
+
+    setFootstepCallback(callback: FootstepCallback): void {
+      assertExperienceInitialized().setFootstepCallback(callback);
+    },
+
+    setListenerCallback(callback: ListenerCallback): void {
+      assertExperienceInitialized().setListenerCallback(callback);
     },
   };
 }

@@ -6,6 +6,7 @@ import type {
 } from "./events";
 import type { EntityId } from "./entity";
 import type { SharedBuffers, DebugCollider } from "./physics-api";
+import type { FootstepCallback, ListenerCallback } from "./audio-events";
 
 /**
  * Render Worker API - exposed via Comlink
@@ -97,4 +98,20 @@ export interface RenderApi {
    * Clean up and dispose resources
    */
   dispose(): void;
+
+  // ============================================
+  // Audio Event Callbacks
+  // ============================================
+
+  /**
+   * Set callback for footstep events (for audio)
+   * Called based on player movement and animation state
+   */
+  setFootstepCallback(callback: FootstepCallback): void;
+
+  /**
+   * Set callback for listener position updates (for spatial audio)
+   * Called each frame with camera position/orientation
+   */
+  setListenerCallback(callback: ListenerCallback): void;
 }

@@ -5,6 +5,8 @@ import type {
   PhysicsBodyConfig,
   FloatingCapsuleConfig,
   MovementInput,
+  CollisionCallback,
+  PlayerStateCallback,
 } from "~/shared/types";
 import type { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
@@ -36,6 +38,17 @@ export default class PhysicsWorld {
   private running = false;
   private lastTime = 0;
   private readonly PHYSICS_INTERVAL = config.physics.interval;
+
+  // Audio callbacks
+  private collisionCallback: CollisionCallback | null = null;
+  private playerStateCallback: PlayerStateCallback | null = null;
+
+  // Collision cooldown to prevent spam (entityA-entityB -> last collision time)
+  private collisionCooldowns: Map<string, number> = new Map();
+  private readonly COLLISION_COOLDOWN_MS = 200; // Increased to reduce spam
+
+  // Per-frame collision limit to prevent audio overload
+  private readonly MAX_COLLISIONS_PER_FRAME = 12;
 
   async init(
     gravity: { x: number; y: number; z: number },
@@ -179,6 +192,11 @@ export default class PhysicsWorld {
 
     const collider = world.createCollider(colliderDesc, body);
 
+    // Enable collision events for dynamic bodies (for audio)
+    if (bodyConfig.type === "dynamic") {
+      collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+    }
+
     // Store references
     this.bodies.set(entityId, body);
     this.colliders.set(entityId, collider);
@@ -208,6 +226,11 @@ export default class PhysicsWorld {
     this.bodies.set(id, this.floatingController.getBody());
     this.colliders.set(id, this.floatingController.getCollider());
     this.playerId = id;
+
+    // Pass stored player state callback if it was set before player was created
+    if (this.playerStateCallback) {
+      this.floatingController.setPlayerStateCallback(this.playerStateCallback);
+    }
 
     // Get buffer index from shared buffer (already registered by main thread)
     sharedBuffer.rebuildEntityMap();
@@ -258,6 +281,9 @@ export default class PhysicsWorld {
 
       const collider = world.createCollider(colliderDesc, body);
 
+      // Enable collision events for audio
+      collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+
       // Store references
       this.bodies.set(id, body);
       this.colliders.set(id, collider);
@@ -298,6 +324,23 @@ export default class PhysicsWorld {
     this.floatingController?.setInput(input);
   }
 
+  /**
+   * Set callback for collision events (for audio)
+   */
+  setCollisionCallback(callback: CollisionCallback): void {
+    this.collisionCallback = callback;
+  }
+
+  /**
+   * Set callback for player state events (jump/land)
+   * Stores callback and passes to floating controller if it exists
+   */
+  setPlayerStateCallback(callback: PlayerStateCallback): void {
+    this.playerStateCallback = callback;
+    // Pass to floating controller if it exists
+    this.floatingController?.setPlayerStateCallback(callback);
+  }
+
   start(): void {
     this.running = true;
     this.lastTime = performance.now();
@@ -332,6 +375,9 @@ export default class PhysicsWorld {
     // Step the physics world
     this.world.step(this.eventQueue);
 
+    // Drain collision events for audio
+    this.drainCollisionEvents();
+
     // Write transforms to SharedArrayBuffer
     this.writeTransformsToSharedBuffer();
 
@@ -343,6 +389,120 @@ export default class PhysicsWorld {
     // Schedule next step at 60Hz
     setTimeout(this.step, this.PHYSICS_INTERVAL);
   };
+
+  /**
+   * Drain collision events from the event queue and emit audio events
+   *
+   * Key improvements:
+   * - Uses vertical velocity for ground collisions (filters out rolling)
+   * - Per-frame collision limit prevents audio overload with mass spawns
+   * - Increased cooldown reduces spam from continuous contact
+   */
+  private drainCollisionEvents(): void {
+    if (!this.collisionCallback || !this.eventQueue || !this.world) return;
+
+    const now = performance.now();
+    let collisionsThisFrame = 0;
+
+    this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      // Only process collision start events
+      if (!started) return;
+
+      // Limit collisions per frame to prevent audio overload
+      if (collisionsThisFrame >= this.MAX_COLLISIONS_PER_FRAME) return;
+
+      const collider1 = this.world!.getCollider(handle1);
+      const collider2 = this.world!.getCollider(handle2);
+
+      if (!collider1 || !collider2) return;
+
+      // Get entity IDs from our collider map
+      const entityA = this.getEntityIdFromCollider(collider1);
+      const entityB = this.getEntityIdFromCollider(collider2);
+
+      // Skip if BOTH entities are unknown (neither is tracked)
+      // This allows ground collisions where one entity is known and ground is null
+      if (entityA === null && entityB === null) return;
+
+      // Skip player collisions (player has its own audio events)
+      if (entityA === this.playerId || entityB === this.playerId) return;
+
+      // Check cooldown to prevent rapid repeated collisions
+      // Use a string representation that handles null values
+      const idA = entityA ?? "ground";
+      const idB = entityB ?? "ground";
+      const pairKey = idA < idB ? `${idA}-${idB}` : `${idB}-${idA}`;
+      const lastCollision = this.collisionCooldowns.get(pairKey);
+      if (lastCollision && now - lastCollision < this.COLLISION_COOLDOWN_MS) {
+        return;
+      }
+
+      // Get collision position (midpoint of the two colliders)
+      const pos1 = collider1.translation();
+      const pos2 = collider2.translation();
+
+      // Get bodies for velocity calculation
+      const body1 = collider1.parent();
+      const body2 = collider2.parent();
+
+      let impulse = 1.0;
+      const isGroundCollision = entityA === null || entityB === null;
+
+      if (isGroundCollision) {
+        // Ground collision: use VERTICAL velocity as impulse metric
+        // Rolling objects have low vertical velocity, impacts have high vertical velocity
+        // This filters out the constant noise from spheres rolling on terrain
+        const dynamicBody = entityA === null ? body2 : body1;
+        if (dynamicBody) {
+          const vel = dynamicBody.linvel();
+          impulse = Math.abs(vel.y);
+        }
+      } else {
+        // Object-object collision: use relative velocity magnitude
+        if (body1 && body2) {
+          const vel1 = body1.linvel();
+          const vel2 = body2.linvel();
+          const relVel = Math.sqrt(
+            Math.pow(vel1.x - vel2.x, 2) +
+              Math.pow(vel1.y - vel2.y, 2) +
+              Math.pow(vel1.z - vel2.z, 2),
+          );
+          impulse = relVel;
+        }
+      }
+
+      // Filter out weak collisions (rolling, gentle bumps)
+      if (impulse < config.audio.collisions.minImpulse) return;
+
+      // Update cooldown and emit event
+      this.collisionCooldowns.set(pairKey, now);
+      collisionsThisFrame++;
+
+      this.collisionCallback!({
+        type: "collision",
+        entityA,
+        entityB,
+        position: {
+          x: (pos1.x + pos2.x) / 2,
+          y: (pos1.y + pos2.y) / 2,
+          z: (pos1.z + pos2.z) / 2,
+        },
+        impulse,
+      });
+    });
+  }
+
+  /**
+   * Get entity ID from a collider (reverse lookup)
+   */
+  private getEntityIdFromCollider(collider: RAPIER.Collider): EntityId | null {
+    for (const [entityId, storedCollider] of this.colliders) {
+      if (storedCollider.handle === collider.handle) {
+        return entityId;
+      }
+    }
+    return null;
+  }
 
   private writeTransformsToSharedBuffer(): void {
     if (!this.sharedBuffer) return;

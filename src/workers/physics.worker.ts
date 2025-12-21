@@ -16,6 +16,8 @@ import type {
   MovementInput,
   EntitySpawnData,
   SharedBuffers,
+  CollisionCallback,
+  PlayerStateCallback,
 } from "~/shared/types";
 import { assertInitialized, assertValidEntityId } from "~/shared/validation";
 import { PhysicsWorld } from "../physics";
@@ -135,6 +137,14 @@ function createPhysicsApi(): PhysicsApi {
     dispose(): void {
       physicsWorld?.dispose();
       physicsWorld = null;
+    },
+
+    setCollisionCallback(callback: CollisionCallback): void {
+      assertPhysicsInitialized().setCollisionCallback(callback);
+    },
+
+    setPlayerStateCallback(callback: PlayerStateCallback): void {
+      assertPhysicsInitialized().setPlayerStateCallback(callback);
     },
   };
 }

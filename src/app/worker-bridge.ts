@@ -8,6 +8,11 @@ import type {
   EntityId,
   Transform,
   DebugCollider,
+  CollisionEvent,
+  JumpEvent,
+  LandEvent,
+  FootstepEvent,
+  ListenerUpdate,
 } from "~/shared/types";
 import { createEntityId } from "~/shared/types";
 import {
@@ -15,6 +20,7 @@ import {
   isSharedArrayBufferSupported,
 } from "~/shared/buffers/transform-buffer";
 import { config } from "~/shared/config";
+import AudioManager from "./audio-manager";
 
 export interface WorkerBridgeCallbacks {
   onProgress?: (progress: number) => void;
@@ -39,6 +45,7 @@ export default class WorkerBridge {
   private physicsApi: Comlink.Remote<PhysicsApi> | null = null;
 
   private sharedBuffer!: SharedTransformBuffer;
+  private audioManager: AudioManager;
 
   private playerId: EntityId | null = null;
   private cubeEntityIds: EntityId[] = [];
@@ -56,6 +63,10 @@ export default class WorkerBridge {
 
   get initialized(): boolean {
     return this._initialized;
+  }
+
+  constructor() {
+    this.audioManager = new AudioManager();
   }
 
   async init(
@@ -76,11 +87,15 @@ export default class WorkerBridge {
     this.sharedBuffer = new SharedTransformBuffer();
     const buffers = this.sharedBuffer.getBuffers();
 
-    // Initialize both workers in parallel with shared buffers
+    // Initialize audio manager, render worker, and physics worker in parallel
     await Promise.all([
+      this.audioManager.init(),
       this.initRenderWorker(canvas, viewport, debug, callbacks, buffers),
       this.initPhysicsWorker(buffers),
     ]);
+
+    // Set up audio callbacks after workers are initialized
+    this.setupAudioCallbacks();
 
     // Spawn initial entities BEFORE starting physics loop
     await this.spawnWorld();
@@ -88,7 +103,54 @@ export default class WorkerBridge {
     // Start physics simulation (transforms written directly to shared buffer)
     this.startPhysics();
 
+    // Audio unlock is handled by loading screen start button (unlockAudio method)
+
     this._initialized = true;
+  }
+
+  /**
+   * Set up audio callbacks from workers
+   */
+  private setupAudioCallbacks(): void {
+    if (!this.physicsApi || !this.renderApi) return;
+
+    // Physics worker callbacks
+    this.physicsApi.setCollisionCallback(
+      Comlink.proxy((event: CollisionEvent) => {
+        this.audioManager.onCollision(event);
+      }),
+    );
+
+    this.physicsApi.setPlayerStateCallback(
+      Comlink.proxy((event: JumpEvent | LandEvent) => {
+        if (event.type === "jump") {
+          this.audioManager.onJump(event);
+        } else {
+          this.audioManager.onLand(event);
+        }
+      }),
+    );
+
+    // Render worker callbacks
+    this.renderApi.setFootstepCallback(
+      Comlink.proxy((event: FootstepEvent) => {
+        this.audioManager.onFootstep(event);
+      }),
+    );
+
+    this.renderApi.setListenerCallback(
+      Comlink.proxy((update: ListenerUpdate) => {
+        this.audioManager.updateListener(update);
+      }),
+    );
+  }
+
+  /**
+   * Unlock audio (called from loading screen start button)
+   * This satisfies the browser's autoplay policy requirement for user gesture
+   */
+  async unlockAudio(): Promise<void> {
+    await this.audioManager.resume();
   }
 
   private async initRenderWorker(
@@ -499,6 +561,7 @@ export default class WorkerBridge {
   dispose(): void {
     this.physicsApi?.dispose();
     this.renderApi?.dispose();
+    this.audioManager.dispose();
 
     this.physicsWorker?.terminate();
     this.renderWorker?.terminate();

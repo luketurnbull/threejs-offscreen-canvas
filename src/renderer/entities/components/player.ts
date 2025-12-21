@@ -1,7 +1,8 @@
 import * as THREE from "three/webgpu";
-import type { EntityId } from "~/shared/types";
+import type { EntityId, FootstepCallback } from "~/shared/types";
 import type { RenderComponent, EntityContext } from "../types";
 import type InputState from "../../systems/input-state";
+import { config } from "~/shared/config";
 import Fox from "../../objects/fox";
 
 /**
@@ -18,11 +19,24 @@ export class PlayerEntity implements RenderComponent {
 
   private fox: Fox;
 
+  // Footstep audio
+  private footstepCallback: FootstepCallback | null = null;
+  private lastFootstepTime = 0;
+  private isMoving = false;
+  private isRunning = false;
+
   constructor(id: EntityId, context: EntityContext) {
     this.id = id;
     this.fox = new Fox(context.scene, context.resources, context.debug);
     this.object = this.fox.model;
     this.mixer = this.fox.mixer;
+  }
+
+  /**
+   * Set callback for footstep events
+   */
+  setFootstepCallback(callback: FootstepCallback): void {
+    this.footstepCallback = callback;
   }
 
   /**
@@ -38,6 +52,13 @@ export class PlayerEntity implements RenderComponent {
     const isMoving = isForward || isBackward;
     const isTurning = isTurnLeft || isTurnRight;
 
+    // Track state for footsteps
+    this.isMoving = isMoving || isTurning;
+    this.isRunning = isRunning && isMoving;
+
+    // Emit footstep events
+    this.emitFootstepIfNeeded();
+
     if (isMoving) {
       const targetAnimation = isRunning ? "running" : "walking";
       if (this.fox.actions.current !== this.fox.actions[targetAnimation]) {
@@ -51,6 +72,30 @@ export class PlayerEntity implements RenderComponent {
       if (this.fox.actions.current !== this.fox.actions.idle) {
         this.fox.play("idle");
       }
+    }
+  }
+
+  /**
+   * Emit footstep event based on movement timing
+   */
+  private emitFootstepIfNeeded(): void {
+    if (!this.footstepCallback || !this.isMoving) return;
+
+    const now = performance.now();
+    const interval = this.isRunning
+      ? config.audio.footsteps.runInterval
+      : config.audio.footsteps.walkInterval;
+
+    if (now - this.lastFootstepTime >= interval) {
+      this.lastFootstepTime = now;
+
+      const pos = this.object.position;
+      this.footstepCallback({
+        type: "footstep",
+        entityId: this.id,
+        position: { x: pos.x, y: pos.y, z: pos.z },
+        intensity: this.isRunning ? 1.0 : 0.6,
+      });
     }
   }
 

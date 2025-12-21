@@ -35,8 +35,8 @@ export default class InputManager {
   private handleKeyboard = (event: KeyboardEvent): void => {
     if (!this.handler) return;
 
-    // Only capture movement keys
-    const movementKeys = ["w", "a", "s", "d", "W", "A", "S", "D", "Shift"];
+    // Only capture movement keys (including spacebar for jump)
+    const movementKeys = ["w", "a", "s", "d", "W", "A", "S", "D", "Shift", " "];
     if (!movementKeys.includes(event.key)) return;
 
     // Prevent default to avoid scrolling etc.

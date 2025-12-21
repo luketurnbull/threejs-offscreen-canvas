@@ -6,6 +6,8 @@ import type {
   DebugUpdateEvent,
   EntityId,
   DebugCollider,
+  FootstepCallback,
+  ListenerCallback,
 } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
@@ -60,6 +62,9 @@ class Experience {
   private onProgress: ((progress: number) => void) | null = null;
   private onReady: (() => void) | null = null;
   private onFrameTiming: ((deltaMs: number) => void) | null = null;
+
+  // Audio callbacks
+  private listenerCallback: ListenerCallback | null = null;
 
   constructor(
     canvas: OffscreenCanvas,
@@ -152,11 +157,40 @@ class Experience {
     // Update camera (follow target)
     this.camera.update();
 
+    // Send listener position for spatial audio
+    this.emitListenerUpdate();
+
     // Render scene
     this.renderer.render(this.scene, this.camera.instance);
 
     // Report frame timing
     this.onFrameTiming?.(delta);
+  }
+
+  /**
+   * Emit listener position update for spatial audio
+   */
+  private emitListenerUpdate(): void {
+    if (!this.listenerCallback) return;
+
+    const camera = this.camera.instance;
+
+    // Get camera world direction
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+
+    // Get camera up vector
+    const up = camera.up.clone();
+
+    this.listenerCallback({
+      position: {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z,
+      },
+      forward: { x: forward.x, y: forward.y, z: forward.z },
+      up: { x: up.x, y: up.y, z: up.z },
+    });
   }
 
   // ============================================
@@ -255,6 +289,25 @@ class Experience {
 
   removeCubes(entityIds: EntityId[]): void {
     this.world.removeCubes(entityIds);
+  }
+
+  // ============================================
+  // Audio Callbacks
+  // ============================================
+
+  /**
+   * Set callback for footstep events
+   */
+  setFootstepCallback(callback: FootstepCallback): void {
+    // Pass directly to world for player entity
+    this.world.setFootstepCallback(callback);
+  }
+
+  /**
+   * Set callback for listener position updates
+   */
+  setListenerCallback(callback: ListenerCallback): void {
+    this.listenerCallback = callback;
   }
 
   // ============================================
