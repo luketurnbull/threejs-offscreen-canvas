@@ -2,21 +2,33 @@ import type { ViewportSize } from "~/shared/types";
 import CanvasManager from "./canvas-manager";
 import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
-import WorkerBridge from "./worker-bridge";
+import WorkerCoordinator from "./worker-coordinator";
+import EntitySpawner from "./entity-spawner";
+import InputRouter from "./input-router";
+import AudioBridge from "./audio-bridge";
 import { ErrorOverlay } from "./components/error-overlay";
 import { LoadingScreen } from "./components/loading-screen";
 
 /**
  * App - Main thread orchestrator
  *
- * Coordinates all managers and worker communication via WorkerBridge.
- * Handles initialization sequence and lifecycle.
+ * Coordinates all managers and modules:
+ * - WorkerCoordinator: Worker lifecycle management
+ * - EntitySpawner: Entity creation across workers
+ * - InputRouter: Input event routing
+ * - AudioBridge: Audio callback wiring
  */
 export default class App {
   private canvas: CanvasManager;
   private input: InputManager;
   private debug: DebugManager;
-  private bridge: WorkerBridge;
+
+  // Modular components
+  private coordinator: WorkerCoordinator;
+  private spawner: EntitySpawner | null = null;
+  private inputRouter: InputRouter | null = null;
+  private audioBridge: AudioBridge;
+
   private errorOverlay: ErrorOverlay | null = null;
   private loadingScreen: LoadingScreen | null = null;
 
@@ -48,7 +60,8 @@ export default class App {
     this.canvas = new CanvasManager(canvasElement);
     this.input = new InputManager(canvasElement);
     this.debug = new DebugManager();
-    this.bridge = new WorkerBridge();
+    this.coordinator = new WorkerCoordinator();
+    this.audioBridge = new AudioBridge();
 
     // Show loading screen
     this.showLoadingScreen();
@@ -62,7 +75,7 @@ export default class App {
 
     // Set up start button callback to unlock audio
     this.loadingScreen.setOnStart(() => {
-      this.bridge.unlockAudio();
+      this.audioBridge.unlockAudio();
     });
 
     document.body.appendChild(this.loadingScreen);
@@ -81,26 +94,47 @@ export default class App {
   }
 
   private async initWorkers(): Promise<void> {
-    // Transfer canvas to worker bridge
+    // Transfer canvas to workers
     const offscreen = this.canvas.transferToOffscreen();
     const viewport = this.canvas.getViewport();
 
-    await this.bridge.init(offscreen, viewport, this.debug.active, {
-      onProgress: (progress: number) => {
-        this.handleLoadProgress(progress);
-      },
-      onReady: () => {
-        // Resources loaded, show start button
-        this.loadingScreen?.showStartButton();
-      },
-      onFrameTiming: (deltaMs: number) => {
-        this.debug.updateFrameTiming(deltaMs);
-      },
-    });
+    // Initialize audio and workers in parallel
+    await Promise.all([
+      this.audioBridge.init(),
+      this.coordinator.init(offscreen, viewport, this.debug.active, {
+        onProgress: (progress: number) => {
+          this.handleLoadProgress(progress);
+        },
+        onReady: () => {
+          // Resources loaded, show start button
+          this.loadingScreen?.showStartButton();
+        },
+        onFrameTiming: (deltaMs: number) => {
+          this.debug.updateFrameTiming(deltaMs);
+        },
+      }),
+    ]);
 
-    // Set up debug callbacks and fetch bindings after all entities are spawned
-    const renderApi = this.bridge.getRenderApi();
-    if (this.debug.active && renderApi) {
+    // Get worker APIs
+    const physicsApi = this.coordinator.getPhysicsApi();
+    const renderApi = this.coordinator.getRenderApi();
+    const sharedBuffer = this.coordinator.getSharedBuffer();
+
+    // Create dependent modules
+    this.spawner = new EntitySpawner(physicsApi, renderApi, sharedBuffer);
+    this.inputRouter = new InputRouter(physicsApi, renderApi);
+
+    // Wire up audio callbacks
+    this.audioBridge.setupCallbacks(physicsApi, renderApi);
+
+    // Spawn world entities
+    await this.spawner.spawnWorld();
+
+    // Start physics simulation
+    this.coordinator.startPhysics();
+
+    // Set up debug callbacks after all entities are spawned
+    if (this.debug.active) {
       this.debug.setUpdateCallback((event) => {
         renderApi.updateDebug(event);
       });
@@ -109,19 +143,19 @@ export default class App {
         renderApi.triggerDebugAction(id);
       });
 
-      // Set up main thread actions for cube spawning (must be on main thread to orchestrate workers)
+      // Set up main thread actions for cube spawning
       this.debug.setMainThreadActions({
         spawnCubes: (count: number) => {
-          this.bridge.spawnCubeStorm(count).catch((err) => {
+          this.spawner?.spawnCubeStorm(count).catch((err) => {
             console.error("Failed to spawn cubes:", err);
           });
         },
         clearCubes: () => {
-          this.bridge.clearCubes().catch((err) => {
+          this.spawner?.clearCubes().catch((err) => {
             console.error("Failed to clear cubes:", err);
           });
         },
-        getCubeCount: () => this.bridge.getCubeCount(),
+        getCubeCount: () => this.spawner?.getCubeCount() ?? 0,
       });
 
       // Fetch debug bindings now that all entities are spawned
@@ -131,9 +165,9 @@ export default class App {
   }
 
   private setupEventListeners(): void {
-    // Input events -> WorkerBridge (routes to both workers)
+    // Input events -> InputRouter
     this.input.setEventCallback((event) => {
-      this.bridge.handleInput(event);
+      this.inputRouter?.handleInput(event);
     });
 
     // Resize handling
@@ -190,7 +224,7 @@ export default class App {
       pixelRatio: Math.min(window.devicePixelRatio, 2),
     };
 
-    this.bridge.resize(viewport);
+    this.coordinator.resize(viewport);
   }
 
   private handleLoadProgress(progress: number): void {
@@ -242,7 +276,15 @@ export default class App {
     this.resizeObserver?.disconnect();
     this.input.dispose();
     this.debug.dispose();
-    this.bridge.dispose();
+
+    // Dispose modular components
+    this.inputRouter?.dispose();
+    this.spawner?.dispose();
+    this.audioBridge.dispose();
+    this.coordinator.dispose();
+
+    this.inputRouter = null;
+    this.spawner = null;
     this._initialized = false;
   }
 

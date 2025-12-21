@@ -8,11 +8,15 @@ Multi-worker architecture for high-performance 3D rendering with physics simulat
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                            MAIN THREAD                                   │
 │                                                                          │
-│   ┌─────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────────┐      │
-│   │   App   │──│WorkerBridge │──│InputManager │  │ DebugManager  │      │
-│   └─────────┘  └──────┬──────┘  └─────────────┘  └───────────────┘      │
-│                       │                                                  │
-└───────────────────────┼──────────────────────────────────────────────────┘
+│   ┌─────────┐                                                           │
+│   │   App   │──┬── WorkerCoordinator (worker lifecycle)                 │
+│   └─────────┘  ├── EntitySpawner (entity management)                    │
+│                ├── InputRouter (input → workers)                        │
+│                ├── AudioBridge (audio callbacks)                        │
+│                │     └── AudioManager (Web Audio API)                   │
+│                ├── InputManager (DOM events)                            │
+│                └── DebugManager (Tweakpane UI)                          │
+└─────────────────────────────────────────────────────────────────────────┘
                         │
         ┌───────────────┼───────────────┐
         │               │               │
@@ -25,6 +29,73 @@ Multi-worker architecture for high-performance 3D rendering with physics simulat
 │               │  └─────────┘  │               │
 │   60Hz fixed  │               │  ~60Hz (rAF)  │
 └───────────────┘               └───────────────┘
+```
+
+## Main Thread Modules
+
+The App class orchestrates four focused modules:
+
+| Module | File | Responsibility |
+|--------|------|----------------|
+| WorkerCoordinator | `worker-coordinator.ts` | Worker lifecycle (create, init, dispose) |
+| EntitySpawner | `entity-spawner.ts` | Entity creation across workers |
+| InputRouter | `input-router.ts` | Route input events to workers |
+| AudioBridge | `audio-bridge.ts` | Wire audio callbacks to AudioManager |
+
+### WorkerCoordinator
+
+Manages worker lifecycle only - no entity logic, no input handling:
+
+```typescript
+const coordinator = new WorkerCoordinator();
+await coordinator.init(canvas, viewport, debug, callbacks);
+
+const physicsApi = coordinator.getPhysicsApi();
+const renderApi = coordinator.getRenderApi();
+const sharedBuffer = coordinator.getSharedBuffer();
+
+coordinator.startPhysics();
+coordinator.resize(viewport);
+coordinator.dispose();
+```
+
+### EntitySpawner
+
+Handles all entity creation with synchronized IDs across workers:
+
+```typescript
+const spawner = new EntitySpawner(physicsApi, renderApi, sharedBuffer);
+
+// World setup
+await spawner.spawnWorld();
+
+// Dynamic entities
+await spawner.spawnDynamicBox(position, size, color);
+await spawner.spawnDynamicSphere(position, radius, color);
+
+// Stress testing
+await spawner.spawnCubeStorm(500);
+await spawner.clearCubes();
+```
+
+### InputRouter
+
+Converts DOM events to worker commands:
+
+```typescript
+const inputRouter = new InputRouter(physicsApi, renderApi);
+inputRouter.handleInput(event);  // Routes keyboard → physics, all → render
+```
+
+### AudioBridge
+
+Connects worker events to AudioManager (which must stay on main thread):
+
+```typescript
+const audioBridge = new AudioBridge();
+await audioBridge.init();
+audioBridge.setupCallbacks(physicsApi, renderApi);
+audioBridge.unlockAudio();  // Called from user gesture
 ```
 
 ## Design Principles
@@ -118,10 +189,17 @@ src/
   
   app/                        # Main thread
     index.ts                  # App orchestrator
-    worker-bridge.ts          # Worker lifecycle & communication
+    worker-coordinator.ts     # Worker lifecycle management
+    entity-spawner.ts         # Entity creation across workers
+    input-router.ts           # Input event routing
+    audio-bridge.ts           # Audio callback wiring
+    audio-manager.ts          # Web Audio API (main thread only)
     canvas-manager.ts         # Canvas & OffscreenCanvas transfer
     input-manager.ts          # DOM event capture & serialization
     debug-manager.ts          # Tweakpane & Stats.js UI
+    components/               # UI components
+      loading-screen.ts       # Loading progress + start button
+      error-overlay.ts        # Error display
     
   renderer/                   # Three.js domain (runs in worker)
     index.ts                  # Experience class (orchestrator)
@@ -149,6 +227,7 @@ src/
       
   physics/                    # Rapier domain (runs in worker)
     index.ts                  # PhysicsWorld class
+    floating-capsule-controller.ts  # Character controller
     
   workers/                    # Worker entry points (thin)
     render.worker.ts          # Comlink.expose(renderApi)
@@ -161,13 +240,17 @@ src/
       entity.ts               # EntityId, Transform, EntitySpawnData
       physics-api.ts          # PhysicsApi interface
       render-api.ts           # RenderApi interface
-      events.ts               # Event types
+      events.ts               # Event types (collision, footstep, etc.)
+      audio.ts                # Audio event types
       resources.ts            # Asset types
     buffers/
       index.ts                # Re-exports
       transform-buffer.ts     # SharedTransformBuffer class
     utils/
       event-emitter.ts        # Type-safe pub/sub
+      
+  audio/                      # Audio utilities
+    sound-pool.ts             # Pooled PositionalAudio instances
       
   shaders/                    # Shared GLSL utilities
 ```
@@ -194,25 +277,24 @@ Main Thread                    Workers
 
 ### Worker Lifecycle
 
+Managed by `WorkerCoordinator`:
+
 ```typescript
-// 1. Create workers
-const physicsWorker = new Worker(new URL("../workers/physics.worker.ts", import.meta.url));
-const renderWorker = new Worker(new URL("../workers/render.worker.ts", import.meta.url));
+// 1. Create shared buffers and workers
+const coordinator = new WorkerCoordinator();
+await coordinator.init(canvas, viewport, debug, callbacks);
 
-// 2. Wrap with Comlink
-const physicsApi = Comlink.wrap<PhysicsApi>(physicsWorker);
-const renderApi = Comlink.wrap<RenderApi>(renderWorker);
+// 2. Get APIs for dependent modules
+const physicsApi = coordinator.getPhysicsApi();
+const renderApi = coordinator.getRenderApi();
+const sharedBuffer = coordinator.getSharedBuffer();
 
-// 3. Create shared buffers
-const sharedBuffer = new SharedTransformBuffer();
-const buffers = sharedBuffer.getBuffers();
+// 3. Create entity spawner
+const spawner = new EntitySpawner(physicsApi, renderApi, sharedBuffer);
+await spawner.spawnWorld();
 
-// 4. Initialize workers (order matters: physics before render)
-await physicsApi.init(config.physics.gravity, buffers);
-await renderApi.init(canvas, viewport, debug, buffers);
-
-// 5. Start simulation
-physicsApi.start();
+// 4. Start physics loop
+coordinator.startPhysics();
 ```
 
 ### Adding a New Worker
@@ -251,7 +333,7 @@ physicsApi.start();
    }
    ```
 
-4. **Register in WorkerBridge** (`src/app/worker-bridge.ts`):
+4. **Add to WorkerCoordinator** (`src/app/worker-coordinator.ts`):
    ```typescript
    private audioWorker: Worker;
    private audioApi: Remote<AudioApi>;
@@ -539,7 +621,7 @@ The project includes an InstancedMesh-based cube spawner for stress testing the 
 ### Architecture
 
 ```
-WorkerBridge (Main Thread)
+EntitySpawner (Main Thread)
     │
     ├── Generate EntityIds
     ├── Register in SharedTransformBuffer

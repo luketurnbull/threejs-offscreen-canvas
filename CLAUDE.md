@@ -52,10 +52,15 @@ src/
   
   app/                    # Main thread orchestration
     index.ts              # App class (coordinator)
-    worker-bridge.ts      # Worker lifecycle, entity spawning
+    worker-coordinator.ts # Worker lifecycle management
+    entity-spawner.ts     # Entity creation across workers
+    input-router.ts       # Input event routing
+    audio-bridge.ts       # Audio callback wiring
+    audio-manager.ts      # Web Audio API (main thread only)
     canvas-manager.ts     # OffscreenCanvas transfer
     input-manager.ts      # Keyboard event capture
     debug-manager.ts      # Tweakpane + Stats.js
+    components/           # UI (loading-screen, error-overlay)
     
   renderer/               # Three.js domain code (WebGPU)
     core/
@@ -123,7 +128,7 @@ config.entities.maxCount             // 1000
 1. Create domain folder: `src/audio/index.ts`
 2. Create thin worker entry: `src/workers/audio.worker.ts`
 3. Add API types: `src/shared/types/audio-api.ts`
-4. Register in WorkerBridge
+4. Add to WorkerCoordinator
 
 ### Adding Scene Objects
 

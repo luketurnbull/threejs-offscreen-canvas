@@ -16,11 +16,11 @@ The audio system provides spatial 3D audio for the multi-worker Three.js applica
                               MAIN THREAD
     +------------------------------------------------------------------+
     |   App                                                            |
-    |    +-- WorkerBridge                                              |
-    |    +-- AudioManager                                              |
-    |           +-- AudioContext (Web Audio API)                       |
-    |           +-- THREE.AudioListener                                |
-    |           +-- Sound pools (footsteps, impacts)                   |
+    |    +-- AudioBridge (callback wiring)                             |
+    |           +-- AudioManager (audio orchestration)                 |
+    |                  +-- AudioContext (Web Audio API)                |
+    |                  +-- THREE.AudioListener                         |
+    |                  +-- Sound pools (footsteps, impacts)            |
     +------------------------------------------------------------------+
                     ^                         ^
          Collision/Jump/Land       Footstep/Listener Events
@@ -34,9 +34,98 @@ The audio system provides spatial 3D audio for the multi-worker Three.js applica
     +-----------------------+     +-----------------------+
 ```
 
-### Why Main Thread?
+## Why Audio Cannot Run in a Web Worker
 
-**AudioContext cannot be created in a Web Worker.** This is a fundamental browser limitation. The audio system must live on the main thread and receive events from workers via Comlink callbacks.
+Unlike the Physics and Render workers, **audio must run on the main thread**. This is not a design choice—it's a fundamental browser limitation.
+
+### Browser Limitation
+
+`AudioContext` cannot be created in a Web Worker. This has been a [requested feature since 2012](https://github.com/WebAudio/web-audio-api/issues/16) but remains unimplemented in all major browsers.
+
+The [Worker support proposal (#2423)](https://github.com/WebAudio/web-audio-api/issues/2423) is marked with "Priority: Urgent" status, but as of 2024, no browser has implemented it.
+
+### What About AudioWorklet?
+
+`AudioWorklet` DOES run in a separate thread, but it's designed for audio **processing** (DSP, effects, synthesis), not playback. It still requires an `AudioContext` to be created on the main thread first.
+
+```
+Main Thread                    AudioWorklet Thread
+     │                              │
+     │ ← AudioContext (required)    │
+     │                              │
+     │ ──► AudioWorkletNode ───────▶│ (DSP processing only)
+     │                              │
+```
+
+### THREE.js Spatial Audio
+
+Three.js's `AudioListener` and `PositionalAudio` classes are also main-thread only, as they rely on `AudioContext` internally.
+
+### Implications for This Project
+
+- `AudioManager` must stay on the main thread
+- Audio events are sent from workers via Comlink callbacks
+- Spatial audio positioning is synced via listener updates each frame
+- The `AudioBridge` module wires worker events to the `AudioManager`
+
+This architecture is correct and cannot be changed without browser support for Web Audio in workers.
+
+## Main Thread Components
+
+### AudioBridge
+
+The `AudioBridge` module is a thin connector that wires worker callbacks to `AudioManager`:
+
+```typescript
+// src/app/audio-bridge.ts
+export default class AudioBridge {
+  private audioManager: AudioManager;
+
+  async init(): Promise<void> {
+    await this.audioManager.init();
+  }
+
+  setupCallbacks(physicsApi, renderApi): void {
+    // Physics events
+    physicsApi.setCollisionCallback(Comlink.proxy(event => 
+      this.audioManager.onCollision(event)
+    ));
+    physicsApi.setPlayerStateCallback(Comlink.proxy(event => 
+      // jump or land
+    ));
+    
+    // Render events
+    renderApi.setFootstepCallback(Comlink.proxy(event => 
+      this.audioManager.onFootstep(event)
+    ));
+    renderApi.setListenerCallback(Comlink.proxy(update => 
+      this.audioManager.updateListener(update)
+    ));
+  }
+
+  async unlockAudio(): Promise<void> {
+    await this.audioManager.resume();
+  }
+}
+```
+
+### AudioManager
+
+The `AudioManager` handles all audio playback:
+
+```typescript
+// src/app/audio-manager.ts
+export default class AudioManager {
+  private context: AudioContext;
+  private listener: THREE.AudioListener;
+  private scene: THREE.Scene;
+  
+  private footstepPool: SoundPool;
+  private collisionPool: SoundPool;
+  private jumpSound: THREE.PositionalAudio;
+  private landSound: THREE.PositionalAudio;
+}
+```
 
 ## Event Flow
 
@@ -50,7 +139,7 @@ PlayerEntity.onPhysicsFrame()
 footstepCallback (Comlink proxy)
     │
     ▼
-WorkerBridge → AudioManager.onFootstep()
+AudioBridge → AudioManager.onFootstep()
     │
     ▼
 SoundPool.play(playerPosition)
@@ -77,7 +166,7 @@ drainCollisionEvents()
 collisionCallback (Comlink proxy)
     │
     ▼
-WorkerBridge → AudioManager.onCollision()
+AudioBridge → AudioManager.onCollision()
     │
     ▼
 SoundPool.play(collisionPosition, { volume: impulse })
@@ -85,8 +174,9 @@ SoundPool.play(collisionPosition, { volume: impulse })
 
 Collisions are filtered by:
 - Minimum impulse threshold (config.audio.collisions.minImpulse)
-- Cooldown per entity pair (100ms)
-- Player collisions are excluded (player has its own audio)
+- Cooldown per entity pair (350ms)
+- Per-frame limit (12 collisions max)
+- Ground collisions use vertical velocity as impulse metric
 
 ### Jump/Land
 
@@ -104,7 +194,7 @@ emitJumpEvent() / emitLandEvent()
 playerStateCallback (Comlink proxy)
     │
     ▼
-WorkerBridge → AudioManager.onJump() / onLand()
+AudioBridge → AudioManager.onJump() / onLand()
 ```
 
 ### Listener Sync
@@ -122,7 +212,7 @@ emitListenerUpdate({ position, forward, up })
 listenerCallback (Comlink proxy)
     │
     ▼
-WorkerBridge → AudioManager.updateListener()
+AudioBridge → AudioManager.updateListener()
 ```
 
 The listener position syncs every frame for accurate spatial audio positioning.
@@ -143,8 +233,8 @@ audio: {
     poolSize: 4,        // reusable audio sources
   },
   collisions: {
-    volume: 0.6,
-    minImpulse: 0.5,    // minimum collision strength
+    volume: 0.4,
+    minImpulse: 4.0,    // minimum collision strength (filters rolling)
     poolSize: 8,
   },
   player: {
@@ -202,7 +292,7 @@ private async loadAssets(): Promise<void> {
 
 ### 3. Create Event Type (if needed)
 
-If you need a new event type, add it to `src/shared/types/audio-events.ts`:
+If you need a new event type, add it to `src/shared/types/audio.ts`:
 
 ```typescript
 export interface MyNewEvent {
@@ -229,7 +319,7 @@ onMyNewSound(event: MyNewEvent): void {
 
 ### 5. Wire Up Callback
 
-In `WorkerBridge.setupAudioCallbacks()`, add the new callback:
+In `AudioBridge.setupCallbacks()`, add the new callback:
 
 ```typescript
 someWorkerApi.setMyNewSoundCallback(
@@ -264,22 +354,22 @@ Features:
 
 ## Browser Autoplay Policy
 
-Browsers require user interaction before playing audio. The WorkerBridge automatically handles this:
+Browsers require user interaction before playing audio. The loading screen start button satisfies this requirement:
 
 ```typescript
-private setupAudioResume(): void {
-  const resumeAudio = async () => {
-    await this.audioManager.resume();
-    document.removeEventListener("click", resumeAudio);
-    document.removeEventListener("keydown", resumeAudio);
-  };
-
-  document.addEventListener("click", resumeAudio, { once: true });
-  document.addEventListener("keydown", resumeAudio, { once: true });
-}
+// In LoadingScreen component
+this.loadingScreen.setOnStart(() => {
+  this.audioBridge.unlockAudio();
+});
 ```
 
-Audio will begin playing after the first click or keypress.
+The `unlockAudio()` method resumes the suspended AudioContext:
+
+```typescript
+async unlockAudio(): Promise<void> {
+  await this.audioManager.resume();
+}
+```
 
 ## File Structure
 
@@ -287,15 +377,16 @@ Audio will begin playing after the first click or keypress.
 src/
   app/
     audio-manager.ts          # Main thread audio orchestrator
-    worker-bridge.ts          # Audio callback integration
+    audio-bridge.ts           # Worker callback wiring
+    components/
+      loading-screen.ts       # Audio unlock via start button
     
   audio/
-    index.ts                  # Re-exports
     sound-pool.ts             # Pooled PositionalAudio instances
     
   shared/
     types/
-      audio-events.ts         # Event interfaces
+      audio.ts                # Event interfaces
     config.ts                 # Audio configuration
     
   physics/
@@ -303,7 +394,7 @@ src/
     floating-capsule-controller.ts  # Jump/land detection
     
   renderer/
-    core/experience.ts        # Listener sync
+    index.ts                  # Listener sync (Experience)
     entities/components/player.ts   # Footstep emission
 ```
 
@@ -316,5 +407,6 @@ src/
 
 Common issues:
 - **No sound**: Check that audio files exist in `public/audio/`
-- **Sounds don't play initially**: Browser autoplay policy - click/press key first
-- **Spatial audio wrong**: Verify listener position is being updated
+- **Sounds don't play initially**: Click the start button on loading screen
+- **Spatial audio wrong**: Verify listener position is being updated (check `updateListener` calls)
+- **Rolling objects too noisy**: Increase `config.audio.collisions.minImpulse`
