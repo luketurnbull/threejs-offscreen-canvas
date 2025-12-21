@@ -164,8 +164,8 @@ export const config = {
       poolSize: 4, // Number of audio sources for overlapping sounds
     },
     collisions: {
-      volume: 0.8,
-      minImpulse: 2.0, // Minimum impulse to trigger sound (filters rolling)
+      volume: 0.4, // Reduced from 0.8 - impacts were too loud
+      minImpulse: 4.0, // Increased from 2.0 - filters gentle rolling/bouncing
       poolSize: 8,
     },
     player: {

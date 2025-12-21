@@ -80,8 +80,9 @@ export class SoundPool {
       this.buffers[Math.floor(Math.random() * this.buffers.length)];
     sound.setBuffer(buffer);
 
-    // Update position
+    // Update position and world matrix for spatial audio
     sound.position.set(position.x, position.y, position.z);
+    sound.updateMatrixWorld();
 
     // Apply options
     const volume = options?.volume ?? 1.0;

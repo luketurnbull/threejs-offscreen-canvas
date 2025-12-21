@@ -253,7 +253,9 @@ export default class AudioManager {
     // Set camera up vector and look-at
     this.camera.up.set(update.up.x, update.up.y, update.up.z);
     this.camera.lookAt(lookAt);
-    this.camera.updateMatrixWorld();
+
+    // Update entire scene's world matrices to ensure listener and all sounds are synced
+    this.scene.updateMatrixWorld(true);
   }
 
   /**

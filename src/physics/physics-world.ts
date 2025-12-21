@@ -45,7 +45,7 @@ export default class PhysicsWorld {
 
   // Collision cooldown to prevent spam (entityA-entityB -> last collision time)
   private collisionCooldowns: Map<string, number> = new Map();
-  private readonly COLLISION_COOLDOWN_MS = 200; // Increased to reduce spam
+  private readonly COLLISION_COOLDOWN_MS = 350; // High value to filter rolling contacts
 
   // Per-frame collision limit to prevent audio overload
   private readonly MAX_COLLISIONS_PER_FRAME = 12;
