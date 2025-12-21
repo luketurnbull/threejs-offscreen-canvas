@@ -10,7 +10,11 @@ Multi-worker architecture for high-performance 3D rendering with physics simulat
 │                                                                          │
 │   ┌─────────┐                                                           │
 │   │   App   │──┬── WorkerCoordinator (worker lifecycle)                 │
-│   └─────────┘  ├── EntitySpawner (entity management)                    │
+│   └─────────┘  ├── EntityCoordinator (entity management)                │
+│                │     ├── WorldSpawner (ground/terrain)                  │
+│                │     ├── PlayerSpawner (player character)               │
+│                │     ├── BoxSpawner (instanced boxes)                   │
+│                │     └── SphereSpawner (instanced spheres)              │
 │                ├── InputRouter (input → workers)                        │
 │                ├── AudioBridge (audio callbacks)                        │
 │                │     └── AudioManager (Web Audio API)                   │
@@ -38,7 +42,7 @@ The App class orchestrates four focused modules:
 | Module | File | Responsibility |
 |--------|------|----------------|
 | WorkerCoordinator | `worker-coordinator.ts` | Worker lifecycle (create, init, dispose) |
-| EntitySpawner | `entity-spawner.ts` | Entity creation across workers |
+| EntityCoordinator | `entities/index.ts` | Entity orchestration via sub-spawners |
 | InputRouter | `input-router.ts` | Route input events to workers |
 | AudioBridge | `audio-bridge.ts` | Wire audio callbacks to AudioManager |
 
@@ -59,24 +63,43 @@ coordinator.resize(viewport);
 coordinator.dispose();
 ```
 
-### EntitySpawner
+### EntityCoordinator
 
-Handles all entity creation with synchronized IDs across workers:
+Orchestrates specialized sub-spawners for different entity types. WebSocket-ready API for future networked sync:
 
 ```typescript
-const spawner = new EntitySpawner(physicsApi, renderApi, sharedBuffer);
+const entities = new EntityCoordinator(physicsApi, renderApi, sharedBuffer);
 
-// World setup
-await spawner.spawnWorld();
+// World setup (ground + player + initial objects)
+await entities.initWorld();
 
-// Dynamic entities
-await spawner.spawnDynamicBox(position, size, color);
-await spawner.spawnDynamicSphere(position, radius, color);
+// Batch spawning (uses InstancedMesh for performance)
+await entities.spawnBoxes([
+  { position: { x: 0, y: 5, z: 0 }, color: 0xff0000 },
+  { position: { x: 1, y: 5, z: 0 }, color: 0x00ff00 },
+]);
 
-// Stress testing
-await spawner.spawnCubeStorm(500);
-await spawner.clearCubes();
+await entities.spawnSpheres([
+  { position: { x: -2, y: 5, z: 0 }, radius: 0.5, color: 0x0000ff },
+]);
+
+// Clear all dynamic entities
+await entities.clearAll();
+
+// Counts
+entities.getBoxCount();     // Number of boxes
+entities.getSphereCount();  // Number of spheres
+entities.getTotalCount();   // Total dynamic entities
 ```
+
+#### Sub-Spawners
+
+| Spawner | Purpose | Rendering |
+|---------|---------|-----------|
+| `WorldSpawner` | Ground/terrain heightfield | Single entity |
+| `PlayerSpawner` | Player with floating capsule | Single entity |
+| `BoxSpawner` | Dynamic boxes | InstancedMesh (1 draw call) |
+| `SphereSpawner` | Dynamic spheres | InstancedMesh (1 draw call) |
 
 ### InputRouter
 
@@ -146,7 +169,7 @@ Experience (orchestrator)
     ├── World (entities + scene objects)
     │     ├── EntityFactory
     │     ├── Floor, Environment
-    │     ├── InstancedCubes (stress testing)
+    │     ├── InstancedBoxes, InstancedSpheres (GPU instancing)
     │     └── Entities (player, ground, etc.)
     ├── TransformSync (physics interpolation)
     ├── Time, Debug, Resources, InputState
@@ -162,7 +185,8 @@ Each class has a single responsibility:
 | Camera | `camera.ts` | PerspectiveCamera + third-person follow |
 | World | `world.ts` | Entity + scene object management |
 | TransformSync | `transform-sync.ts` | Physics-to-render interpolation |
-| InstancedCubes | `instanced-cubes.ts` | GPU-instanced cube rendering |
+| InstancedBoxes | `instanced-boxes.ts` | GPU-instanced box rendering |
+| InstancedSpheres | `instanced-spheres.ts` | GPU-instanced sphere rendering |
 
 ### 4. Centralized Configuration
 
@@ -190,7 +214,14 @@ src/
   app/                        # Main thread
     index.ts                  # App orchestrator
     worker-coordinator.ts     # Worker lifecycle management
-    entity-spawner.ts         # Entity creation across workers
+    entities/                 # Entity coordination
+      index.ts                # EntityCoordinator
+      types.ts                # Spawn command types
+      spawners/
+        world-spawner.ts      # Ground/terrain spawning
+        player-spawner.ts     # Player character spawning
+        box-spawner.ts        # Instanced boxes spawning
+        sphere-spawner.ts     # Instanced spheres spawning
     input-router.ts           # Input event routing
     audio-bridge.ts           # Audio callback wiring
     audio-manager.ts          # Web Audio API (main thread only)
@@ -616,38 +647,47 @@ new THREE.WebGPURenderer({ forceWebGL: true });
 
 ## Instanced Mesh Stress Testing
 
-The project includes an InstancedMesh-based cube spawner for stress testing the WebGPU + Web Workers + Physics pipeline.
+The project uses InstancedMesh for boxes and spheres, enabling hundreds of dynamic physics objects with minimal draw calls.
 
 ### Architecture
 
 ```
-EntitySpawner (Main Thread)
+EntityCoordinator (Main Thread)
     │
-    ├── Generate EntityIds
-    ├── Register in SharedTransformBuffer
-    │
-    ├── physicsApi.spawnCubes(entityIds, positions, size)
-    │   └── Creates Rapier RigidBodies for each cube
-    │
-    └── renderApi.spawnCubes(entityIds, size)
-        └── World.spawnCubes()
-            └── InstancedCubes.addCubes()
+    ├── BoxSpawner / SphereSpawner
+    │     ├── Generate EntityIds
+    │     ├── Register in SharedTransformBuffer
+    │     │
+    │     ├── physicsApi.spawnBodies(entityIds, positions, config)
+    │     │   └── Creates Rapier RigidBodies for each entity
+    │     │
+    │     └── renderApi.addBoxes/addSpheres(entityIds, colors, scales)
+    │         └── World.addBoxes/addSpheres()
+    │             └── InstancedBoxes/InstancedSpheres
 ```
 
-### InstancedCubes Component
+### Instanced Components
 
-Efficiently renders hundreds of cubes in a single draw call:
+Both `InstancedBoxes` and `InstancedSpheres` share the same pattern:
 
 ```typescript
-// Uses DynamicDrawUsage for frequent transform updates
-mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+// Per-instance colors via instanceColor attribute
+mesh.instanceColor = new THREE.InstancedBufferAttribute(colors, 3);
 
-// Update transforms from SharedArrayBuffer each frame
-for (const entityId of entityIds) {
-  const transform = sharedBuffer.readTransform(bufferIndex);
-  mesh.setMatrixAt(index, interpolatedMatrix);
+// Per-instance scale via transform matrix
+const matrix = new THREE.Matrix4();
+matrix.compose(position, quaternion, scale);
+mesh.setMatrixAt(index, matrix);
+
+// O(1) removal via swap-with-last pattern
+removeInstance(entityId) {
+  const lastIndex = this.activeCount - 1;
+  if (index !== lastIndex) {
+    // Swap with last instance
+    this.swapInstances(index, lastIndex);
+  }
+  this.activeCount--;
 }
-mesh.instanceMatrix.needsUpdate = true;
 ```
 
 ### Debug Controls
@@ -656,16 +696,17 @@ Access via `#debug` URL hash:
 
 | Control | Action |
 |---------|--------|
-| Drop 100 Cubes | Spawns 100 physics cubes |
-| Drop 500 Cubes | Spawns 500 physics cubes |
-| Clear All Cubes | Removes all spawned cubes |
-| Cubes counter | Shows current cube count |
+| Drop 100 Cubes | Spawns 100 physics boxes |
+| Drop 500 Cubes | Spawns 500 physics boxes |
+| Clear All Cubes | Removes all dynamic entities |
+| Cubes counter | Shows total entity count |
 
 ### Performance Characteristics
 
-- Single draw call for all cubes (GPU instancing)
+- **2 draw calls** for all boxes + spheres (1 per type)
+- Per-instance colors and scales
+- O(1) instance removal (swap-with-last pattern)
 - Zero-copy transform sync via SharedArrayBuffer
-- Interpolated transforms for smooth rendering
 - Physics runs at fixed 60Hz, rendering at display refresh rate
 
 ## Browser Support

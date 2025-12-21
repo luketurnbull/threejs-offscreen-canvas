@@ -18,6 +18,7 @@ import type {
   SharedBuffers,
   CollisionCallback,
   PlayerStateCallback,
+  BatchBodyConfig,
 } from "~/shared/types";
 import { assertInitialized, assertValidEntityId } from "~/shared/validation";
 import { PhysicsWorld } from "../physics";
@@ -71,7 +72,6 @@ function createPhysicsApi(): PhysicsApi {
       entity: EntitySpawnData,
       bodyConfig: PhysicsBodyConfig,
     ): Promise<void> {
-      // Validate inputs at worker boundary
       assertValidEntityId(entity.id, "PhysicsApi.spawnEntity");
       assertPhysicsInitialized().spawnEntity(
         entity.id,
@@ -85,7 +85,6 @@ function createPhysicsApi(): PhysicsApi {
       transform: Transform,
       controllerConfig: FloatingCapsuleConfig,
     ): Promise<void> {
-      // Validate inputs at worker boundary
       assertValidEntityId(id, "PhysicsApi.spawnFloatingPlayer");
       assertPhysicsInitialized().spawnFloatingPlayer(
         id,
@@ -99,12 +98,37 @@ function createPhysicsApi(): PhysicsApi {
       assertPhysicsInitialized().removeEntity(id);
     },
 
+    // ============================================
+    // Batch Operations
+    // ============================================
+
+    async spawnBodies(
+      entityIds: EntityId[],
+      positions: Float32Array,
+      config: BatchBodyConfig,
+    ): Promise<void> {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "PhysicsApi.spawnBodies");
+      }
+      assertPhysicsInitialized().spawnBodies(entityIds, positions, config);
+    },
+
+    async removeBodies(entityIds: EntityId[]): Promise<void> {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "PhysicsApi.removeBodies");
+      }
+      assertPhysicsInitialized().removeBodies(entityIds);
+    },
+
+    // ============================================
+    // Legacy Methods (deprecated)
+    // ============================================
+
     async spawnCubes(
       entityIds: EntityId[],
       positions: Float32Array,
       size: number,
     ): Promise<void> {
-      // Validate inputs at worker boundary
       for (const id of entityIds) {
         assertValidEntityId(id, "PhysicsApi.spawnCubes");
       }
@@ -118,9 +142,17 @@ function createPhysicsApi(): PhysicsApi {
       assertPhysicsInitialized().removeCubes(entityIds);
     },
 
+    // ============================================
+    // Player Control
+    // ============================================
+
     setPlayerInput(input: MovementInput): void {
       assertPhysicsInitialized().setPlayerInput(input);
     },
+
+    // ============================================
+    // Simulation Control
+    // ============================================
 
     start(): void {
       assertPhysicsInitialized().start();
@@ -138,6 +170,10 @@ function createPhysicsApi(): PhysicsApi {
       physicsWorld?.dispose();
       physicsWorld = null;
     },
+
+    // ============================================
+    // Audio Callbacks
+    // ============================================
 
     setCollisionCallback(callback: CollisionCallback): void {
       assertPhysicsInitialized().setCollisionCallback(callback);

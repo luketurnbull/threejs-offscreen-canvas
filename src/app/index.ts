@@ -3,7 +3,7 @@ import CanvasManager from "./canvas-manager";
 import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
 import WorkerCoordinator from "./worker-coordinator";
-import EntitySpawner from "./entity-spawner";
+import EntityCoordinator from "./entities";
 import InputRouter from "./input-router";
 import AudioBridge from "./audio-bridge";
 import { ErrorOverlay } from "./components/error-overlay";
@@ -25,7 +25,7 @@ export default class App {
 
   // Modular components
   private coordinator: WorkerCoordinator;
-  private spawner: EntitySpawner | null = null;
+  private entities: EntityCoordinator | null = null;
   private inputRouter: InputRouter | null = null;
   private audioBridge: AudioBridge;
 
@@ -121,14 +121,14 @@ export default class App {
     const sharedBuffer = this.coordinator.getSharedBuffer();
 
     // Create dependent modules
-    this.spawner = new EntitySpawner(physicsApi, renderApi, sharedBuffer);
+    this.entities = new EntityCoordinator(physicsApi, renderApi, sharedBuffer);
     this.inputRouter = new InputRouter(physicsApi, renderApi);
 
     // Wire up audio callbacks
     this.audioBridge.setupCallbacks(physicsApi, renderApi);
 
-    // Spawn world entities
-    await this.spawner.spawnWorld();
+    // Initialize world (ground, player, test objects)
+    await this.entities.initWorld();
 
     // Start physics simulation
     this.coordinator.startPhysics();
@@ -143,19 +143,26 @@ export default class App {
         renderApi.triggerDebugAction(id);
       });
 
-      // Set up main thread actions for cube spawning
+      // Set up main thread actions for entity spawning
       this.debug.setMainThreadActions({
         spawnCubes: (count: number) => {
-          this.spawner?.spawnCubeStorm(count).catch((err) => {
-            console.error("Failed to spawn cubes:", err);
+          this.entities?.spawnTestObjects(count, 0).catch((err) => {
+            console.error("Failed to spawn boxes:", err);
+          });
+        },
+        spawnSpheres: (count: number) => {
+          this.entities?.spawnTestObjects(0, count).catch((err) => {
+            console.error("Failed to spawn spheres:", err);
           });
         },
         clearCubes: () => {
-          this.spawner?.clearCubes().catch((err) => {
-            console.error("Failed to clear cubes:", err);
+          this.entities?.clearAll().catch((err) => {
+            console.error("Failed to clear entities:", err);
           });
         },
-        getCubeCount: () => this.spawner?.getCubeCount() ?? 0,
+        getCubeCount: () => this.entities?.getTotalCount() ?? 0,
+        getBoxCount: () => this.entities?.getBoxCount() ?? 0,
+        getSphereCount: () => this.entities?.getSphereCount() ?? 0,
       });
 
       // Fetch debug bindings now that all entities are spawned
@@ -279,12 +286,12 @@ export default class App {
 
     // Dispose modular components
     this.inputRouter?.dispose();
-    this.spawner?.dispose();
+    this.entities?.dispose();
     this.audioBridge.dispose();
     this.coordinator.dispose();
 
     this.inputRouter = null;
-    this.spawner = null;
+    this.entities = null;
     this._initialized = false;
   }
 

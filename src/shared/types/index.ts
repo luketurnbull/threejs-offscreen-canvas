@@ -23,6 +23,7 @@ export type {
   SharedBuffers,
   DebugCollider,
   DebugColliderShape,
+  BatchBodyConfig,
 } from "./physics-api";
 
 // Entity System

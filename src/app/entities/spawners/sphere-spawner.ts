@@ -1,0 +1,171 @@
+/**
+ * SphereSpawner - Manages all sphere entities using instancing
+ *
+ * Handles spawning, removal, and tracking of sphere entities.
+ * Uses InstancedMesh on render side for maximum performance.
+ */
+
+import * as Comlink from "comlink";
+import type { PhysicsApi } from "~/shared/types/physics-api";
+import type { RenderApi } from "~/shared/types/render-api";
+import type { SharedTransformBuffer } from "~/shared/buffers/transform-buffer";
+import { createEntityId, type EntityId } from "~/shared/types";
+import {
+  DEFAULT_COLORS,
+  DEFAULT_SIZES,
+  type SpawnSphereCommand,
+} from "../types";
+
+export default class SphereSpawner {
+  private entityIds: Set<EntityId> = new Set();
+  private physicsApi: Comlink.Remote<PhysicsApi>;
+  private renderApi: Comlink.Remote<RenderApi>;
+  private sharedBuffer: SharedTransformBuffer;
+
+  constructor(
+    physicsApi: Comlink.Remote<PhysicsApi>,
+    renderApi: Comlink.Remote<RenderApi>,
+    sharedBuffer: SharedTransformBuffer,
+  ) {
+    this.physicsApi = physicsApi;
+    this.renderApi = renderApi;
+    this.sharedBuffer = sharedBuffer;
+  }
+
+  /**
+   * Spawn a single sphere entity
+   */
+  async spawn(command: SpawnSphereCommand): Promise<EntityId> {
+    const entityId = command.entityId ?? createEntityId();
+    const radius = command.radius ?? DEFAULT_SIZES.sphereRadius;
+    const color = command.color ?? DEFAULT_COLORS.sphere;
+    const { position } = command;
+
+    // Register in shared buffer
+    this.sharedBuffer.registerEntity(entityId);
+
+    // Create physics body
+    const positions = new Float32Array([position.x, position.y, position.z]);
+    await this.physicsApi.spawnBodies([entityId], positions, {
+      type: "sphere",
+      radius,
+    });
+
+    // Create render instance
+    await this.renderApi.addSphere(entityId, color, radius);
+
+    this.entityIds.add(entityId);
+    return entityId;
+  }
+
+  /**
+   * Spawn multiple spheres in a batch (more efficient)
+   */
+  async spawnBatch(commands: SpawnSphereCommand[]): Promise<EntityId[]> {
+    if (commands.length === 0) return [];
+
+    const entityIds: EntityId[] = [];
+    const colors: number[] = [];
+    const radii: number[] = [];
+    const positions = new Float32Array(commands.length * 3);
+
+    for (let i = 0; i < commands.length; i++) {
+      const command = commands[i];
+      const entityId = command.entityId ?? createEntityId();
+      const radius = command.radius ?? DEFAULT_SIZES.sphereRadius;
+      const color = command.color ?? DEFAULT_COLORS.sphere;
+
+      entityIds.push(entityId);
+      colors.push(color);
+      radii.push(radius);
+
+      positions[i * 3] = command.position.x;
+      positions[i * 3 + 1] = command.position.y;
+      positions[i * 3 + 2] = command.position.z;
+
+      // Register in shared buffer
+      this.sharedBuffer.registerEntity(entityId);
+      this.entityIds.add(entityId);
+    }
+
+    // Batch physics spawn - use average radius for physics
+    const avgRadius =
+      radii.reduce((a, b) => a + b, 0) / radii.length ||
+      DEFAULT_SIZES.sphereRadius;
+    await this.physicsApi.spawnBodies(entityIds, positions, {
+      type: "sphere",
+      radius: avgRadius,
+    });
+
+    // Batch render spawn
+    await this.renderApi.addSpheres(entityIds, colors, radii);
+
+    return entityIds;
+  }
+
+  /**
+   * Remove a single sphere entity
+   */
+  async remove(entityId: EntityId): Promise<void> {
+    if (!this.entityIds.has(entityId)) return;
+
+    await this.physicsApi.removeBodies([entityId]);
+    await this.renderApi.removeInstances([entityId]);
+    this.sharedBuffer.unregisterEntity(entityId);
+    this.entityIds.delete(entityId);
+  }
+
+  /**
+   * Remove multiple sphere entities
+   */
+  async removeBatch(entityIds: EntityId[]): Promise<void> {
+    const validIds = entityIds.filter((id) => this.entityIds.has(id));
+    if (validIds.length === 0) return;
+
+    await this.physicsApi.removeBodies(validIds);
+    await this.renderApi.removeInstances(validIds);
+
+    for (const id of validIds) {
+      this.sharedBuffer.unregisterEntity(id);
+      this.entityIds.delete(id);
+    }
+  }
+
+  /**
+   * Remove all sphere entities
+   */
+  async clear(): Promise<void> {
+    const allIds = Array.from(this.entityIds);
+    if (allIds.length === 0) return;
+
+    await this.physicsApi.removeBodies(allIds);
+    await this.renderApi.removeInstances(allIds);
+
+    for (const id of allIds) {
+      this.sharedBuffer.unregisterEntity(id);
+    }
+    this.entityIds.clear();
+  }
+
+  /**
+   * Get current sphere count
+   */
+  getCount(): number {
+    return this.entityIds.size;
+  }
+
+  /**
+   * Get all sphere entity IDs
+   */
+  getEntityIds(): EntityId[] {
+    return Array.from(this.entityIds);
+  }
+
+  /**
+   * Dispose of spawner resources
+   */
+  dispose(): void {
+    // Note: Does not remove entities - call clear() first if needed
+    this.entityIds.clear();
+  }
+}

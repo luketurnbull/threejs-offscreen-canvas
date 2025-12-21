@@ -106,13 +106,16 @@ function createRenderApi(): RenderApi {
       assertExperienceInitialized().triggerDebugAction(id);
     },
 
+    // ============================================
+    // Entity Management (unique entities)
+    // ============================================
+
     async spawnEntity(
       id: EntityId,
       type: string,
       data?: Record<string, unknown>,
       debugCollider?: DebugCollider,
     ): Promise<void> {
-      // Validate inputs at worker boundary
       assertValidEntityId(id, "RenderApi.spawnEntity");
       assertNonEmptyString(type, "entity type", "RenderApi.spawnEntity");
 
@@ -133,8 +136,100 @@ function createRenderApi(): RenderApi {
       return assertExperienceInitialized().getPlayerEntityId();
     },
 
+    // ============================================
+    // Instanced Boxes
+    // ============================================
+
+    addBox(
+      entityId: EntityId,
+      color: number,
+      scale?: { x: number; y: number; z: number },
+    ): void {
+      assertValidEntityId(entityId, "RenderApi.addBox");
+      assertExperienceInitialized().addBox(entityId, color, scale);
+    },
+
+    addBoxes(
+      entityIds: EntityId[],
+      colors: number[],
+      scales?: Array<{ x: number; y: number; z: number }>,
+    ): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.addBoxes");
+      }
+      assertExperienceInitialized().addBoxes(entityIds, colors, scales);
+    },
+
+    removeBoxes(entityIds: EntityId[]): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.removeBoxes");
+      }
+      assertExperienceInitialized().removeBoxes(entityIds);
+    },
+
+    clearBoxes(): void {
+      assertExperienceInitialized().clearBoxes();
+    },
+
+    getBoxCount(): number {
+      return assertExperienceInitialized().getBoxCount();
+    },
+
+    // ============================================
+    // Instanced Spheres
+    // ============================================
+
+    addSphere(entityId: EntityId, color: number, radius?: number): void {
+      assertValidEntityId(entityId, "RenderApi.addSphere");
+      assertExperienceInitialized().addSphere(entityId, color, radius);
+    },
+
+    addSpheres(
+      entityIds: EntityId[],
+      colors: number[],
+      radii?: number[],
+    ): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.addSpheres");
+      }
+      assertExperienceInitialized().addSpheres(entityIds, colors, radii);
+    },
+
+    removeSpheres(entityIds: EntityId[]): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.removeSpheres");
+      }
+      assertExperienceInitialized().removeSpheres(entityIds);
+    },
+
+    clearSpheres(): void {
+      assertExperienceInitialized().clearSpheres();
+    },
+
+    getSphereCount(): number {
+      return assertExperienceInitialized().getSphereCount();
+    },
+
+    // ============================================
+    // Combined Instance Operations
+    // ============================================
+
+    removeInstances(entityIds: EntityId[]): void {
+      for (const id of entityIds) {
+        assertValidEntityId(id, "RenderApi.removeInstances");
+      }
+      assertExperienceInitialized().removeInstances(entityIds);
+    },
+
+    clearAllInstances(): void {
+      assertExperienceInitialized().clearAllInstances();
+    },
+
+    // ============================================
+    // Legacy Methods (deprecated)
+    // ============================================
+
     async spawnCubes(entityIds: EntityId[], size: number): Promise<void> {
-      // Validate all entity IDs at worker boundary
       for (const id of entityIds) {
         assertValidEntityId(id, "RenderApi.spawnCubes");
       }
@@ -148,10 +243,18 @@ function createRenderApi(): RenderApi {
       assertExperienceInitialized().removeCubes(entityIds);
     },
 
+    // ============================================
+    // Lifecycle
+    // ============================================
+
     dispose(): void {
       experience?.dispose();
       experience = null;
     },
+
+    // ============================================
+    // Audio Callbacks
+    // ============================================
 
     setFootstepCallback(callback: FootstepCallback): void {
       assertExperienceInitialized().setFootstepCallback(callback);

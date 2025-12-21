@@ -12,8 +12,11 @@ export interface DebugActionCallback {
 
 export interface MainThreadActions {
   spawnCubes?: (count: number) => void;
+  spawnSpheres?: (count: number) => void;
   clearCubes?: () => void;
   getCubeCount?: () => number;
+  getBoxCount?: () => number;
+  getSphereCount?: () => number;
 }
 
 /**

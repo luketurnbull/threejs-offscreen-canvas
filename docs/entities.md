@@ -30,22 +30,87 @@ The entity system provides a composable, extensible way to add new entity types 
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Main Thread Entity Coordination
+
+On the main thread, entities are managed by the **EntityCoordinator** which orchestrates specialized sub-spawners:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   EntityCoordinator                          │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ WorldSpawner │  │PlayerSpawner│  │ BoxSpawner/Sphere │  │
+│  │   (ground)   │  │  (player)   │  │  (instanced)       │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                           │
+           ┌───────────────┼───────────────┐
+           ▼               ▼               ▼
+    ┌──────────┐    ┌──────────┐    ┌──────────┐
+    │ PhysicsApi│    │ RenderApi │    │SharedBuffer│
+    └──────────┘    └──────────┘    └──────────┘
+```
+
+### Sub-Spawners
+
+| Spawner | Purpose | Entity Type |
+|---------|---------|-------------|
+| `WorldSpawner` | Ground/terrain | Heightfield physics + "ground" entity |
+| `PlayerSpawner` | Player character | Floating capsule + "player" entity |
+| `BoxSpawner` | Dynamic boxes | Batch physics + InstancedMesh |
+| `SphereSpawner` | Dynamic spheres | Batch physics + InstancedMesh |
+
+### Instanced Entities (High Performance)
+
+Boxes and spheres use **InstancedMesh** for maximum performance:
+
+```typescript
+// Single draw call for all boxes
+const boxSpawner = new BoxSpawner(physicsApi, renderApi, sharedBuffer);
+
+// Spawn 500 boxes in one batch
+await boxSpawner.spawnBatch([
+  { position: { x: 0, y: 5, z: 0 }, color: 0xff0000 },
+  { position: { x: 1, y: 5, z: 0 }, color: 0x00ff00 },
+  // ... 498 more
+]);
+```
+
+Benefits:
+- **1 draw call** for all boxes (vs N draw calls)
+- **O(1) removal** via swap-with-last pattern
+- **Per-instance colors** and scales
+- **GPU instancing** for transforms
+
 ## Directory Structure
 
 ```
-src/renderer/
-├── index.ts                    # Renderer (uses EntityFactory)
-├── entities/
-│   ├── types.ts                # RenderComponent, EntityContext interfaces
-│   ├── index.ts                # EntityFactory + EntityRegistry
-│   └── components/
-│       ├── player.ts           # PlayerEntity (fox + animations)
-│       ├── ground.ts           # GroundEntity (invisible physics proxy)
-│       └── static-mesh.ts      # Generic fallback entity
-└── objects/                    # Pure visual components (no entity logic)
-    ├── fox.ts                  # Animated fox model
-    ├── floor.ts                # Ground plane mesh
-    └── plane.ts                # Shader plane
+src/
+├── app/
+│   └── entities/                   # Main thread entity coordination
+│       ├── index.ts                # EntityCoordinator
+│       ├── types.ts                # Spawn command types
+│       └── spawners/
+│           ├── world-spawner.ts    # Ground/terrain
+│           ├── player-spawner.ts   # Player character
+│           ├── box-spawner.ts      # Dynamic boxes (instanced)
+│           └── sphere-spawner.ts   # Dynamic spheres (instanced)
+│
+└── renderer/
+    ├── index.ts                    # Experience (uses EntityFactory)
+    ├── entities/
+    │   ├── types.ts                # RenderComponent, EntityContext interfaces
+    │   ├── index.ts                # EntityFactory + EntityRegistry
+    │   └── components/
+    │       ├── player.ts           # PlayerEntity (fox + animations)
+    │       ├── ground.ts           # GroundEntity (invisible physics proxy)
+    │       └── static-mesh.ts      # Generic fallback entity
+    └── objects/                    # Pure visual components (no entity logic)
+        ├── fox.ts                  # Animated fox model
+        ├── floor.ts                # Ground plane mesh
+        ├── instanced-boxes.ts      # InstancedMesh for boxes
+        ├── instanced-spheres.ts    # InstancedMesh for spheres
+        └── plane.ts                # Shader plane
 ```
 
 ## Core Interfaces

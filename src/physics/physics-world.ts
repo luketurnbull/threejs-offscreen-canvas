@@ -7,6 +7,7 @@ import type {
   MovementInput,
   CollisionCallback,
   PlayerStateCallback,
+  BatchBodyConfig,
 } from "~/shared/types";
 import type { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
@@ -239,13 +240,13 @@ export default class PhysicsWorld {
   }
 
   /**
-   * Spawn multiple cubes at once for stress testing
-   * Returns array of entity IDs for the spawned cubes
+   * Spawn multiple physics bodies at once (boxes or spheres)
+   * Entity IDs must already be registered in the shared buffer
    */
-  spawnCubes(
+  spawnBodies(
     entityIds: EntityId[],
     positions: Float32Array,
-    size: number,
+    bodyConfig: BatchBodyConfig,
   ): void {
     const { world, sharedBuffer } = this.ensureInitialized();
 
@@ -268,16 +269,23 @@ export default class PhysicsWorld {
 
       const body = world.createRigidBody(bodyDesc);
 
-      // Create box collider
-      const halfSize = size / 2;
-      const colliderDesc = RAPIER.ColliderDesc.cuboid(
-        halfSize,
-        halfSize,
-        halfSize,
-      )
-        .setMass(1)
-        .setFriction(0.5)
-        .setRestitution(0.3);
+      // Create collider based on type
+      let colliderDesc: RAPIER.ColliderDesc;
+
+      if (bodyConfig.type === "sphere") {
+        const radius = bodyConfig.radius ?? 0.5;
+        colliderDesc = RAPIER.ColliderDesc.ball(radius)
+          .setMass(1)
+          .setFriction(0.3)
+          .setRestitution(0.6);
+      } else {
+        // Default to box
+        const halfSize = (bodyConfig.size ?? 1) / 2;
+        colliderDesc = RAPIER.ColliderDesc.cuboid(halfSize, halfSize, halfSize)
+          .setMass(1)
+          .setFriction(0.5)
+          .setRestitution(0.3);
+      }
 
       const collider = world.createCollider(colliderDesc, body);
 
@@ -295,12 +303,30 @@ export default class PhysicsWorld {
   }
 
   /**
-   * Remove multiple entities at once
+   * Remove multiple physics bodies at once
    */
-  removeCubes(entityIds: EntityId[]): void {
+  removeBodies(entityIds: EntityId[]): void {
     for (const id of entityIds) {
       this.removeEntity(id);
     }
+  }
+
+  /**
+   * @deprecated Use spawnBodies with type: 'box' instead
+   */
+  spawnCubes(
+    entityIds: EntityId[],
+    positions: Float32Array,
+    size: number,
+  ): void {
+    this.spawnBodies(entityIds, positions, { type: "box", size });
+  }
+
+  /**
+   * @deprecated Use removeBodies instead
+   */
+  removeCubes(entityIds: EntityId[]): void {
+    this.removeBodies(entityIds);
   }
 
   removeEntity(id: EntityId): void {

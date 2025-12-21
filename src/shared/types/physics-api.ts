@@ -103,6 +103,15 @@ export interface SharedBuffers {
 }
 
 /**
+ * Batch body spawn configuration
+ */
+export interface BatchBodyConfig {
+  type: "box" | "sphere";
+  size?: number; // For boxes (uniform scale)
+  radius?: number; // For spheres
+}
+
+/**
  * Physics Worker API
  */
 export interface PhysicsApi {
@@ -136,9 +145,32 @@ export interface PhysicsApi {
    */
   removeEntity(id: EntityId): void;
 
+  // ============================================
+  // Batch Operations (for instanced entities)
+  // ============================================
+
   /**
-   * Spawn multiple cubes at once for stress testing
+   * Spawn multiple physics bodies at once
+   * Supports both boxes and spheres
    * Entity IDs must already be registered in the shared buffer
+   */
+  spawnBodies(
+    entityIds: EntityId[],
+    positions: Float32Array,
+    config: BatchBodyConfig,
+  ): Promise<void>;
+
+  /**
+   * Remove multiple physics bodies at once
+   */
+  removeBodies(entityIds: EntityId[]): Promise<void>;
+
+  // ============================================
+  // Legacy Methods (deprecated, for backwards compatibility)
+  // ============================================
+
+  /**
+   * @deprecated Use spawnBodies with type: 'box' instead
    */
   spawnCubes(
     entityIds: EntityId[],
@@ -147,14 +179,22 @@ export interface PhysicsApi {
   ): Promise<void>;
 
   /**
-   * Remove multiple cubes at once
+   * @deprecated Use removeBodies instead
    */
   removeCubes(entityIds: EntityId[]): Promise<void>;
+
+  // ============================================
+  // Player Control
+  // ============================================
 
   /**
    * Update player movement input
    */
   setPlayerInput(input: MovementInput): void;
+
+  // ============================================
+  // Simulation Control
+  // ============================================
 
   /**
    * Start the physics simulation loop

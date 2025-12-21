@@ -2,7 +2,8 @@ import * as THREE from "three/webgpu";
 import type { EntityId } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import type { RenderComponent } from "../entities";
-import type InstancedCubes from "../objects/instanced-cubes";
+import type InstancedBoxes from "../objects/instanced-boxes";
+import type InstancedSpheres from "../objects/instanced-spheres";
 
 /**
  * TransformSync - Physics-to-render transform interpolation
@@ -21,8 +22,9 @@ class TransformSync {
   private sharedBuffer: SharedTransformBuffer;
   private lastPhysicsFrame = 0;
 
-  // Instanced cubes reference for batch transform updates
-  private instancedCubes: InstancedCubes | null = null;
+  // Instanced mesh references for batch transform updates
+  private instancedBoxes: InstancedBoxes | null = null;
+  private instancedSpheres: InstancedSpheres | null = null;
 
   // Temporary objects for interpolation (avoid allocation in render loop)
   private tempQuatPrev = new THREE.Quaternion();
@@ -35,10 +37,17 @@ class TransformSync {
   }
 
   /**
-   * Set the instanced cubes renderer for batch transform updates
+   * Set the instanced boxes renderer for batch transform updates
    */
-  setInstancedCubes(instancedCubes: InstancedCubes | null): void {
-    this.instancedCubes = instancedCubes;
+  setInstancedBoxes(instancedBoxes: InstancedBoxes | null): void {
+    this.instancedBoxes = instancedBoxes;
+  }
+
+  /**
+   * Set the instanced spheres renderer for batch transform updates
+   */
+  setInstancedSpheres(instancedSpheres: InstancedSpheres | null): void {
+    this.instancedSpheres = instancedSpheres;
   }
 
   /**
@@ -83,10 +92,9 @@ class TransformSync {
       this.applyInterpolatedTransform(entity, alpha);
     }
 
-    // Update instanced cubes transforms
-    if (this.instancedCubes) {
-      this.updateInstancedCubes(alpha);
-    }
+    // Update all instanced mesh transforms
+    this.updateInstancedBoxes(alpha);
+    this.updateInstancedSpheres(alpha);
 
     if (newFrameAvailable) {
       this.lastPhysicsFrame = currentFrame;
@@ -96,48 +104,21 @@ class TransformSync {
   }
 
   /**
-   * Update all instanced cube transforms with interpolation
+   * Update all instanced box transforms with interpolation
    */
-  private updateInstancedCubes(alpha: number): void {
-    if (!this.instancedCubes) return;
+  private updateInstancedBoxes(alpha: number): void {
+    if (!this.instancedBoxes) return;
 
-    const entityIds = this.instancedCubes.getEntityIds();
+    const entityIds = this.instancedBoxes.getEntityIds();
 
     for (const entityId of entityIds) {
       const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
       if (bufferIndex < 0) continue;
 
-      // Read both previous and current transforms from shared buffer
-      const transforms = this.sharedBuffer.readTransform(bufferIndex);
-
-      // Interpolate position
-      this.tempPosition.set(
-        this.lerp(transforms.previous.posX, transforms.current.posX, alpha),
-        this.lerp(transforms.previous.posY, transforms.current.posY, alpha),
-        this.lerp(transforms.previous.posZ, transforms.current.posZ, alpha),
-      );
-
-      // Spherical interpolation for quaternion rotation
-      this.tempQuatPrev.set(
-        transforms.previous.rotX,
-        transforms.previous.rotY,
-        transforms.previous.rotZ,
-        transforms.previous.rotW,
-      );
-      this.tempQuatCurrent.set(
-        transforms.current.rotX,
-        transforms.current.rotY,
-        transforms.current.rotZ,
-        transforms.current.rotW,
-      );
-      this.tempQuaternion.slerpQuaternions(
-        this.tempQuatPrev,
-        this.tempQuatCurrent,
-        alpha,
-      );
+      this.interpolateTransform(bufferIndex, alpha);
 
       // Update the instance
-      this.instancedCubes.updateInstance(
+      this.instancedBoxes.updateInstance(
         entityId,
         this.tempPosition,
         this.tempQuaternion,
@@ -145,22 +126,39 @@ class TransformSync {
     }
 
     // Flush all changes to GPU
-    this.instancedCubes.commitUpdates();
+    this.instancedBoxes.commitUpdates();
   }
 
   /**
-   * Apply interpolated transform to a single entity
-   *
-   * @param entity - The entity to update
-   * @param alpha - Pre-calculated interpolation factor [0, 1]
+   * Update all instanced sphere transforms with interpolation
    */
-  private applyInterpolatedTransform(
-    entity: RenderComponent,
-    alpha: number,
-  ): void {
-    const bufferIndex = this.sharedBuffer.getEntityIndex(entity.id);
-    if (bufferIndex < 0) return;
+  private updateInstancedSpheres(alpha: number): void {
+    if (!this.instancedSpheres) return;
 
+    const entityIds = this.instancedSpheres.getEntityIds();
+
+    for (const entityId of entityIds) {
+      const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
+      if (bufferIndex < 0) continue;
+
+      this.interpolateTransform(bufferIndex, alpha);
+
+      // Update the instance
+      this.instancedSpheres.updateInstance(
+        entityId,
+        this.tempPosition,
+        this.tempQuaternion,
+      );
+    }
+
+    // Flush all changes to GPU
+    this.instancedSpheres.commitUpdates();
+  }
+
+  /**
+   * Interpolate transform from shared buffer into temp objects
+   */
+  private interpolateTransform(bufferIndex: number, alpha: number): void {
     // Read both previous and current transforms from shared buffer
     const transforms = this.sharedBuffer.readTransform(bufferIndex);
 
@@ -189,6 +187,22 @@ class TransformSync {
       this.tempQuatCurrent,
       alpha,
     );
+  }
+
+  /**
+   * Apply interpolated transform to a single entity
+   *
+   * @param entity - The entity to update
+   * @param alpha - Pre-calculated interpolation factor [0, 1]
+   */
+  private applyInterpolatedTransform(
+    entity: RenderComponent,
+    alpha: number,
+  ): void {
+    const bufferIndex = this.sharedBuffer.getEntityIndex(entity.id);
+    if (bufferIndex < 0) return;
+
+    this.interpolateTransform(bufferIndex, alpha);
 
     // Apply to entity
     entity.object.position.copy(this.tempPosition);
@@ -216,6 +230,8 @@ class TransformSync {
   dispose(): void {
     // Reset state - temporary objects will be garbage collected
     this.lastPhysicsFrame = 0;
+    this.instancedBoxes = null;
+    this.instancedSpheres = null;
   }
 }
 

@@ -113,7 +113,7 @@ class Experience {
       camera: this.camera,
     });
 
-    // Wire up TransformSync to World for instanced cube updates
+    // Wire up TransformSync to World for instanced mesh updates
     this.world.setTransformSync(this.transformSync);
 
     // Wire up resource loading callbacks
@@ -274,9 +274,84 @@ class Experience {
   }
 
   // ============================================
-  // Instanced Cubes (stress testing)
+  // Instanced Boxes
   // ============================================
 
+  addBox(
+    entityId: EntityId,
+    color: number,
+    scale?: { x: number; y: number; z: number },
+  ): void {
+    this.world.addBox(entityId, color, scale);
+    this.transformSync.rebuildEntityMap();
+  }
+
+  addBoxes(
+    entityIds: EntityId[],
+    colors: number[],
+    scales?: Array<{ x: number; y: number; z: number }>,
+  ): void {
+    this.world.addBoxes(entityIds, colors, scales);
+    this.transformSync.rebuildEntityMap();
+  }
+
+  removeBoxes(entityIds: EntityId[]): void {
+    this.world.removeBoxes(entityIds);
+  }
+
+  clearBoxes(): void {
+    this.world.clearBoxes();
+  }
+
+  getBoxCount(): number {
+    return this.world.getBoxCount();
+  }
+
+  // ============================================
+  // Instanced Spheres
+  // ============================================
+
+  addSphere(entityId: EntityId, color: number, radius?: number): void {
+    this.world.addSphere(entityId, color, radius);
+    this.transformSync.rebuildEntityMap();
+  }
+
+  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void {
+    this.world.addSpheres(entityIds, colors, radii);
+    this.transformSync.rebuildEntityMap();
+  }
+
+  removeSpheres(entityIds: EntityId[]): void {
+    this.world.removeSpheres(entityIds);
+  }
+
+  clearSpheres(): void {
+    this.world.clearSpheres();
+  }
+
+  getSphereCount(): number {
+    return this.world.getSphereCount();
+  }
+
+  // ============================================
+  // Combined Instance Operations
+  // ============================================
+
+  removeInstances(entityIds: EntityId[]): void {
+    this.world.removeInstances(entityIds);
+  }
+
+  clearAllInstances(): void {
+    this.world.clearAllInstances();
+  }
+
+  // ============================================
+  // Legacy Methods (deprecated, for backwards compatibility)
+  // ============================================
+
+  /**
+   * @deprecated Use addBoxes instead
+   */
   async spawnCubes(entityIds: EntityId[], size: number): Promise<void> {
     // Wait for resources with timeout
     await this.waitForResources();
@@ -287,6 +362,9 @@ class Experience {
     this.transformSync.rebuildEntityMap();
   }
 
+  /**
+   * @deprecated Use removeBoxes instead
+   */
   removeCubes(entityIds: EntityId[]): void {
     this.world.removeCubes(entityIds);
   }

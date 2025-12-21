@@ -53,11 +53,12 @@ export interface RenderApi {
   triggerDebugAction(id: string): void;
 
   // ============================================
-  // Entity Management (for physics sync)
+  // Entity Management (for unique entities like player, ground)
   // ============================================
 
   /**
    * Spawn a render entity (mesh) for a physics entity
+   * Used for unique entities that don't use instancing (player, ground)
    * @param debugCollider - Optional collider info for debug visualization
    */
   spawnEntity(
@@ -78,21 +79,102 @@ export interface RenderApi {
   getPlayerEntityId(): Promise<EntityId | null>;
 
   // ============================================
-  // Instanced Cubes (for stress testing)
+  // Instanced Boxes (single draw call for all boxes)
   // ============================================
 
   /**
-   * Spawn instanced cubes (batch operation for performance testing)
-   * @param entityIds - Pre-generated entity IDs for each cube
-   * @param size - Size of each cube
+   * Add a single box to the instanced mesh
+   */
+  addBox(
+    entityId: EntityId,
+    color: number,
+    scale?: { x: number; y: number; z: number },
+  ): void;
+
+  /**
+   * Add multiple boxes to the instanced mesh
+   */
+  addBoxes(
+    entityIds: EntityId[],
+    colors: number[],
+    scales?: Array<{ x: number; y: number; z: number }>,
+  ): void;
+
+  /**
+   * Remove boxes from the instanced mesh
+   */
+  removeBoxes(entityIds: EntityId[]): void;
+
+  /**
+   * Clear all instanced boxes
+   */
+  clearBoxes(): void;
+
+  /**
+   * Get current box count
+   */
+  getBoxCount(): number;
+
+  // ============================================
+  // Instanced Spheres (single draw call for all spheres)
+  // ============================================
+
+  /**
+   * Add a single sphere to the instanced mesh
+   */
+  addSphere(entityId: EntityId, color: number, radius?: number): void;
+
+  /**
+   * Add multiple spheres to the instanced mesh
+   */
+  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void;
+
+  /**
+   * Remove spheres from the instanced mesh
+   */
+  removeSpheres(entityIds: EntityId[]): void;
+
+  /**
+   * Clear all instanced spheres
+   */
+  clearSpheres(): void;
+
+  /**
+   * Get current sphere count
+   */
+  getSphereCount(): number;
+
+  // ============================================
+  // Combined Instance Operations
+  // ============================================
+
+  /**
+   * Remove instances by entity IDs (auto-detects box vs sphere)
+   */
+  removeInstances(entityIds: EntityId[]): void;
+
+  /**
+   * Clear all instanced meshes (boxes and spheres)
+   */
+  clearAllInstances(): void;
+
+  // ============================================
+  // Legacy Methods (deprecated, for backwards compatibility)
+  // ============================================
+
+  /**
+   * @deprecated Use addBoxes instead
    */
   spawnCubes(entityIds: EntityId[], size: number): Promise<void>;
 
   /**
-   * Remove instanced cubes
-   * @param entityIds - Entity IDs to remove
+   * @deprecated Use removeBoxes instead
    */
   removeCubes(entityIds: EntityId[]): void;
+
+  // ============================================
+  // Lifecycle
+  // ============================================
 
   /**
    * Clean up and dispose resources

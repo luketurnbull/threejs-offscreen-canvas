@@ -9,14 +9,15 @@ import type {
 import { createPlayerEntity } from "./components/player";
 import { createGroundEntity } from "./components/ground";
 import { createStaticMeshEntity } from "./components/static-mesh";
-import { createDynamicBoxEntity } from "./components/dynamic-box";
-import { createDynamicSphereEntity } from "./components/dynamic-sphere";
 
 /**
  * EntityRegistry - Manages component factory registration
  *
  * Allows adding new entity types without modifying Renderer.
  * New types are registered with their factory function.
+ *
+ * Note: Dynamic boxes and spheres now use instancing (InstancedBoxes/InstancedSpheres)
+ * and are NOT registered here. Only unique entity types need registration.
  */
 class EntityRegistry {
   private factories = new Map<string, RenderComponentFactory>();
@@ -57,11 +58,10 @@ class EntityRegistry {
 export const entityRegistry = new EntityRegistry();
 
 // Register built-in entity types
+// Note: Boxes and spheres use instancing, not individual entities
 entityRegistry.register("player", createPlayerEntity);
 entityRegistry.register("ground", createGroundEntity);
 entityRegistry.register("static-mesh", createStaticMeshEntity);
-entityRegistry.register("dynamic-box", createDynamicBoxEntity);
-entityRegistry.register("dynamic-sphere", createDynamicSphereEntity);
 
 /**
  * EntityFactory - Creates render components from type strings

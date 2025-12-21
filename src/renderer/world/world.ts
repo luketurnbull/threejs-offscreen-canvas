@@ -19,7 +19,8 @@ import { PlayerEntity } from "../entities/components/player";
 import Floor from "../objects/floor";
 import Environment from "./environment";
 import PhysicsDebugRenderer from "../sync/physics-debug-renderer";
-import InstancedCubes from "../objects/instanced-cubes";
+import InstancedBoxes from "../objects/instanced-boxes";
+import InstancedSpheres from "../objects/instanced-spheres";
 
 /**
  * Context passed to World for creating entities and scene objects
@@ -42,7 +43,7 @@ export interface WorldContext {
  * - Entity lifecycle (spawn, remove, update)
  * - Calling entity lifecycle hooks (onRenderFrame, onPhysicsFrame)
  * - Tracking player entity for camera following
- * - Managing instanced cubes for stress testing
+ * - Managing instanced boxes and spheres for performance
  */
 class World {
   private context: WorldContext;
@@ -56,8 +57,9 @@ class World {
   private debugColliders: Map<EntityId, DebugCollider> = new Map();
   private physicsDebugRenderer: PhysicsDebugRenderer;
 
-  // Instanced cubes for stress testing
-  private instancedCubes: InstancedCubes | null = null;
+  // Instanced meshes for performance (single draw call per type)
+  private instancedBoxes: InstancedBoxes | null = null;
+  private instancedSpheres: InstancedSpheres | null = null;
   private transformSync: TransformSync | null = null;
 
   // Scene objects (non-entity visuals that don't need physics sync)
@@ -78,7 +80,7 @@ class World {
   }
 
   /**
-   * Set the transform sync reference for instanced cube updates
+   * Set the transform sync reference for instanced mesh updates
    */
   setTransformSync(transformSync: TransformSync): void {
     this.transformSync = transformSync;
@@ -104,6 +106,16 @@ class World {
     // Create non-entity scene objects
     this.sceneObjects.floor = new Floor(scene, resources, debug);
     this.sceneObjects.environment = new Environment(scene, resources, debug);
+
+    // Create instanced mesh managers (lazy initialization moved to createSceneObjects for consistency)
+    this.instancedBoxes = new InstancedBoxes(scene, 1000);
+    this.instancedSpheres = new InstancedSpheres(scene, 1000);
+
+    // Wire to TransformSync
+    if (this.transformSync) {
+      this.transformSync.setInstancedBoxes(this.instancedBoxes);
+      this.transformSync.setInstancedSpheres(this.instancedSpheres);
+    }
   }
 
   /**
@@ -190,46 +202,158 @@ class World {
   }
 
   // ============================================
-  // Instanced Cubes (stress testing)
+  // Instanced Boxes
   // ============================================
 
   /**
-   * Spawn instanced cubes
-   * Creates InstancedCubes renderer lazily on first spawn
+   * Add a single box to the instanced mesh
    */
-  spawnCubes(entityIds: EntityId[], size: number): void {
-    // Lazy create InstancedCubes on first spawn
-    if (!this.instancedCubes) {
-      this.instancedCubes = new InstancedCubes(
-        this.context.scene,
-        1000, // max count
-        size,
-      );
+  addBox(
+    entityId: EntityId,
+    color: number,
+    scale?: { x: number; y: number; z: number },
+  ): void {
+    if (!this.instancedBoxes) return;
+    this.instancedBoxes.addBox(entityId, color, scale);
+  }
 
-      // Wire to TransformSync
-      if (this.transformSync) {
-        this.transformSync.setInstancedCubes(this.instancedCubes);
+  /**
+   * Add multiple boxes to the instanced mesh
+   */
+  addBoxes(
+    entityIds: EntityId[],
+    colors: number[],
+    scales?: Array<{ x: number; y: number; z: number }>,
+  ): void {
+    if (!this.instancedBoxes) return;
+    this.instancedBoxes.addBoxes(entityIds, colors, scales);
+  }
+
+  /**
+   * Remove boxes from the instanced mesh
+   */
+  removeBoxes(entityIds: EntityId[]): void {
+    if (!this.instancedBoxes) return;
+    this.instancedBoxes.removeBoxes(entityIds);
+  }
+
+  /**
+   * Clear all instanced boxes
+   */
+  clearBoxes(): void {
+    if (!this.instancedBoxes) return;
+    this.instancedBoxes.clear();
+  }
+
+  /**
+   * Get box count
+   */
+  getBoxCount(): number {
+    return this.instancedBoxes?.getCount() ?? 0;
+  }
+
+  // ============================================
+  // Instanced Spheres
+  // ============================================
+
+  /**
+   * Add a single sphere to the instanced mesh
+   */
+  addSphere(entityId: EntityId, color: number, radius?: number): void {
+    if (!this.instancedSpheres) return;
+    this.instancedSpheres.addSphere(entityId, color, radius);
+  }
+
+  /**
+   * Add multiple spheres to the instanced mesh
+   */
+  addSpheres(entityIds: EntityId[], colors: number[], radii?: number[]): void {
+    if (!this.instancedSpheres) return;
+    this.instancedSpheres.addSpheres(entityIds, colors, radii);
+  }
+
+  /**
+   * Remove spheres from the instanced mesh
+   */
+  removeSpheres(entityIds: EntityId[]): void {
+    if (!this.instancedSpheres) return;
+    this.instancedSpheres.removeSpheres(entityIds);
+  }
+
+  /**
+   * Clear all instanced spheres
+   */
+  clearSpheres(): void {
+    if (!this.instancedSpheres) return;
+    this.instancedSpheres.clear();
+  }
+
+  /**
+   * Get sphere count
+   */
+  getSphereCount(): number {
+    return this.instancedSpheres?.getCount() ?? 0;
+  }
+
+  // ============================================
+  // Combined Instance Operations
+  // ============================================
+
+  /**
+   * Remove instances by entity IDs (auto-detects type)
+   */
+  removeInstances(entityIds: EntityId[]): void {
+    // Check each entity ID and remove from appropriate instanced mesh
+    for (const id of entityIds) {
+      if (this.instancedBoxes?.hasEntity(id)) {
+        this.instancedBoxes.removeBox(id);
+      } else if (this.instancedSpheres?.hasEntity(id)) {
+        this.instancedSpheres.removeSphere(id);
       }
     }
-
-    // Add cubes to the instanced mesh
-    this.instancedCubes.addCubes(entityIds);
   }
 
   /**
-   * Remove instanced cubes
+   * Clear all instanced meshes
+   */
+  clearAllInstances(): void {
+    this.clearBoxes();
+    this.clearSpheres();
+  }
+
+  // ============================================
+  // Legacy cube methods (for backwards compatibility during transition)
+  // ============================================
+
+  /**
+   * @deprecated Use addBoxes instead
+   */
+  spawnCubes(entityIds: EntityId[], size: number): void {
+    if (!this.instancedBoxes) return;
+
+    // Generate random colors and uniform scales
+    const colors = entityIds.map(() => {
+      const hue = Math.random();
+      const color = new THREE.Color().setHSL(hue, 0.6, 0.5);
+      return color.getHex();
+    });
+    const scales = entityIds.map(() => ({ x: size, y: size, z: size }));
+
+    this.instancedBoxes.addBoxes(entityIds, colors, scales);
+  }
+
+  /**
+   * @deprecated Use removeBoxes instead
    */
   removeCubes(entityIds: EntityId[]): void {
-    if (!this.instancedCubes) return;
-    this.instancedCubes.removeCubes(entityIds);
+    this.removeBoxes(entityIds);
   }
 
   /**
-   * Clear all instanced cubes
+   * @deprecated Use clearBoxes instead
    */
   clearCubes(): void {
-    if (!this.instancedCubes) return;
-    this.instancedCubes.clear();
+    this.clearBoxes();
   }
 
   /**
@@ -309,9 +433,11 @@ class World {
     }
     this.entities.clear();
 
-    // Dispose instanced cubes
-    this.instancedCubes?.dispose();
-    this.instancedCubes = null;
+    // Dispose instanced meshes
+    this.instancedBoxes?.dispose();
+    this.instancedBoxes = null;
+    this.instancedSpheres?.dispose();
+    this.instancedSpheres = null;
 
     // Dispose scene objects
     this.sceneObjects.floor?.dispose();
