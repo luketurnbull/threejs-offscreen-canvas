@@ -1,4 +1,3 @@
-import type { ViewportSize } from "~/shared/types";
 import CanvasManager from "./canvas-manager";
 import InputManager from "./input-manager";
 import DebugManager from "./debug-manager";
@@ -6,6 +5,7 @@ import WorkerCoordinator from "./worker-coordinator";
 import EntityCoordinator from "./entities";
 import InputRouter from "./input-router";
 import SpawnController from "./spawn-controller";
+import ResizeHandler from "./resize-handler";
 import { ErrorOverlay } from "./components/error-overlay";
 import { LoadingScreen } from "./components/loading-screen";
 import { EntitySpawnerUI } from "./components/entity-spawner-ui";
@@ -29,15 +29,13 @@ export default class App {
   private entities: EntityCoordinator | null = null;
   private inputRouter: InputRouter | null = null;
   private spawnController: SpawnController | null = null;
+  private resizeHandler: ResizeHandler | null = null;
 
   // UI components
   private errorOverlay: ErrorOverlay | null = null;
   private loadingScreen: LoadingScreen | null = null;
   private spawnerUI: EntitySpawnerUI | null = null;
 
-  private resizeObserver: ResizeObserver | null = null;
-  private pixelRatioMediaQuery: MediaQueryList | null = null;
-  private pixelRatioHandler: (() => void) | null = null;
   private _initialized = false;
 
   constructor() {
@@ -191,66 +189,20 @@ export default class App {
     });
 
     // Resize handling
-    this.resizeObserver = new ResizeObserver(this.handleResize.bind(this));
-    this.resizeObserver.observe(this.canvas.element);
+    this.resizeHandler = new ResizeHandler(this.canvas.element, (viewport) => {
+      this.coordinator.resize(viewport);
+    });
+    this.resizeHandler.start();
 
     // Critical: Clean up GPU resources on page unload to prevent context exhaustion
-    // WebGPU has strict limits on adapter/device allocation - must release before refresh
     window.addEventListener("beforeunload", () => {
       this.dispose();
     });
-
-    // Also listen for devicePixelRatio changes
-    this.setupPixelRatioListener();
 
     // Start stats tracking if debug active
     if (this.debug.active) {
       this.startStatsLoop();
     }
-  }
-
-  private setupPixelRatioListener(): void {
-    // Create handler that can be removed on dispose
-    this.pixelRatioHandler = (): void => {
-      this.handleResize();
-      // Re-register for next change with new media query
-      this.updatePixelRatioMediaQuery();
-    };
-
-    this.updatePixelRatioMediaQuery();
-  }
-
-  private updatePixelRatioMediaQuery(): void {
-    // Remove previous listener if exists
-    if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
-      this.pixelRatioMediaQuery.removeEventListener(
-        "change",
-        this.pixelRatioHandler,
-      );
-    }
-
-    // Create new media query for current pixel ratio
-    this.pixelRatioMediaQuery = matchMedia(
-      `(resolution: ${window.devicePixelRatio}dppx)`,
-    );
-
-    if (this.pixelRatioHandler) {
-      this.pixelRatioMediaQuery.addEventListener(
-        "change",
-        this.pixelRatioHandler,
-        { once: true },
-      );
-    }
-  }
-
-  private handleResize(): void {
-    const viewport: ViewportSize = {
-      width: this.canvas.element.clientWidth,
-      height: this.canvas.element.clientHeight,
-      pixelRatio: Math.min(window.devicePixelRatio, 2),
-    };
-
-    this.coordinator.resize(viewport);
   }
 
   private handleLoadProgress(progress: number): void {
@@ -291,17 +243,9 @@ export default class App {
     this.spawnerUI?.remove();
     this.spawnerUI = null;
 
-    // Clean up pixel ratio listener
-    if (this.pixelRatioMediaQuery && this.pixelRatioHandler) {
-      this.pixelRatioMediaQuery.removeEventListener(
-        "change",
-        this.pixelRatioHandler,
-      );
-    }
-    this.pixelRatioMediaQuery = null;
-    this.pixelRatioHandler = null;
-
-    this.resizeObserver?.disconnect();
+    // Clean up managers
+    this.resizeHandler?.dispose();
+    this.resizeHandler = null;
     this.input.dispose();
     this.debug.dispose();
 
