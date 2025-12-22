@@ -1,9 +1,5 @@
 import * as Comlink from "comlink";
-import type {
-  RenderApi,
-  PhysicsApi,
-  ViewportSize,
-} from "~/shared/types";
+import type { RenderApi, PhysicsApi, ViewportSize } from "~/shared/types";
 import {
   SharedTransformBuffer,
   isSharedArrayBufferSupported,

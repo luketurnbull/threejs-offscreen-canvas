@@ -38,7 +38,6 @@ import Experience from "../renderer";
  */
 function createRenderApi(): RenderApi {
   let experience: Experience | null = null;
-
   /**
    * Assert that Experience is initialized
    * @throws Error if experience is null

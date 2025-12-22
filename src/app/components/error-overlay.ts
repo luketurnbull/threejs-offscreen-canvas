@@ -37,6 +37,8 @@ export class ErrorOverlay extends HTMLElement {
       "Failed to initialize physics engine. Physics simulation will not be available.",
     WEBGL_NOT_SUPPORTED:
       "WebGL is not supported in your browser. Please use a browser with WebGL support.",
+    GPU_CONTEXT_EXHAUSTED:
+      "GPU resources exhausted. This can happen after rapid page refreshes. Please wait a moment and try again, or restart your browser.",
   } as const;
 
   constructor() {
