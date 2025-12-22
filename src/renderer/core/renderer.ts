@@ -1,26 +1,26 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { ViewportSize } from "~/shared/types";
 import { config } from "~/shared/config";
 import type Debug from "../systems/debug";
 import type { DebugFolder } from "../systems/debug";
 
 /**
- * Renderer - WebGPURenderer wrapper
+ * Renderer - WebGLRenderer wrapper
  *
  * Responsible for:
- * - Creating and configuring THREE.WebGPURenderer
+ * - Creating and configuring THREE.WebGLRenderer
  * - Handling viewport resizing
  * - Rendering scene/camera pairs
  *
- * This is a thin wrapper that exposes the WebGPURenderer as `instance`
+ * This is a thin wrapper that exposes the WebGLRenderer as `instance`
  * for cases where direct access is needed.
  *
- * Note: WebGPU requires async initialization via init().
+ * Note: Three.js WebGLRenderer accepts OffscreenCanvas natively since r128+.
  * The type assertion is needed due to @types/three not including OffscreenCanvas
- * in the WebGPURendererParameters.canvas type definition.
+ * in the WebGLRendererParameters.canvas type definition.
  */
 class Renderer {
-  readonly instance: THREE.WebGPURenderer;
+  readonly instance: THREE.WebGLRenderer;
   private debugFolder: DebugFolder | null = null;
 
   // Debug state for color binding (needs to be an object property)
@@ -28,16 +28,13 @@ class Renderer {
     clearColor: config.renderer.clearColor,
   };
 
-  private debug: Debug | undefined;
-
   constructor(canvas: OffscreenCanvas, viewport: ViewportSize, debug?: Debug) {
-    this.debug = debug;
-
-    // OffscreenCanvas is natively supported by Three.js WebGPURenderer
+    // OffscreenCanvas is natively supported by Three.js WebGLRenderer
     // Type assertion needed due to incomplete @types/three definitions
-    this.instance = new THREE.WebGPURenderer({
+    this.instance = new THREE.WebGLRenderer({
       canvas: canvas as unknown as HTMLCanvasElement,
       antialias: true,
+      powerPreference: "high-performance",
     });
 
     // Tone mapping for realistic lighting
@@ -58,28 +55,10 @@ class Renderer {
     );
     this.instance.setPixelRatio(pixelRatio);
     this.instance.setSize(viewport.width, viewport.height, false);
-  }
 
-  /**
-   * Initialize WebGPU - must be called before rendering
-   * WebGPU requires async initialization for adapter/device acquisition
-   */
-  async init(): Promise<void> {
-    await this.instance.init();
-
-    // Monitor for GPU device loss (defensive)
-    const device = (
-      this.instance as unknown as { backend?: { device?: GPUDevice } }
-    ).backend?.device;
-    if (device?.lost) {
-      device.lost.then((info: GPUDeviceLostInfo) => {
-        console.warn("[Renderer] GPU device lost:", info.reason, info.message);
-      });
-    }
-
-    // Setup debug controls after init
-    if (this.debug) {
-      this.addDebug(this.debug);
+    // Setup debug controls
+    if (debug) {
+      this.addDebug(debug);
     }
   }
 
@@ -127,21 +106,11 @@ class Renderer {
   dispose(): void {
     this.debugFolder?.dispose();
 
-    // Explicitly destroy WebGPU device to release GPU resources immediately
-    // This is critical for preventing context exhaustion on page refresh
-    // device.destroy() is synchronous and completes before page unloads
-    const backend = this.instance as unknown as {
-      backend?: { device?: GPUDevice; gl?: WebGL2RenderingContext };
-    };
-    if (backend.backend?.device) {
-      backend.backend.device.destroy();
-    }
-
-    // Also handle WebGL fallback case
-    if (backend.backend?.gl) {
-      const ext = backend.backend.gl.getExtension("WEBGL_lose_context");
-      ext?.loseContext();
-    }
+    // Force context loss to release WebGL resources immediately
+    // This helps prevent context exhaustion on rapid page refreshes
+    const gl = this.instance.getContext();
+    const ext = gl.getExtension("WEBGL_lose_context");
+    ext?.loseContext();
 
     this.instance.dispose();
   }

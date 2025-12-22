@@ -164,7 +164,7 @@ Inspired by Bruno Simon's Three.js Journey architecture, using dependency inject
 ```
 Experience (orchestrator)
     │
-    ├── Renderer (WebGPURenderer wrapper)
+    ├── Renderer (WebGLRenderer wrapper)
     ├── Camera (PerspectiveCamera + follow behavior)
     ├── World (entities + scene objects)
     │     ├── EntityFactory
@@ -181,7 +181,7 @@ Each class has a single responsibility:
 | Class | File | Responsibility |
 |-------|------|----------------|
 | Experience | `index.ts` | Entry point, orchestrator, update loop |
-| Renderer | `renderer.ts` | WebGPURenderer config/render/resize |
+| Renderer | `renderer.ts` | WebGLRenderer config/render/resize |
 | Camera | `camera.ts` | PerspectiveCamera + third-person follow |
 | World | `world.ts` | Entity + scene object management |
 | TransformSync | `transform-sync.ts` | Physics-to-render interpolation |
@@ -612,38 +612,29 @@ const unsubscribe = time.on("tick", ({ delta, elapsed }) => {
 });
 ```
 
-## WebGPU Renderer
+## WebGL Renderer
 
-The project uses Three.js WebGPURenderer for improved GPU utilization:
+The project uses Three.js WebGLRenderer:
 
 ```typescript
-// Import from webgpu build
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 
-// WebGPURenderer requires async initialization
-const renderer = new THREE.WebGPURenderer({
+const renderer = new THREE.WebGLRenderer({
   canvas: offscreenCanvas,
   antialias: true,
+  powerPreference: "high-performance",
 });
-await renderer.init();  // Required before rendering
 ```
 
-### Key Differences from WebGLRenderer
+### Why WebGL Instead of WebGPU
 
-| Feature | WebGL | WebGPU |
-|---------|-------|--------|
-| Initialization | Synchronous | Async (`await renderer.init()`) |
-| Import path | `"three"` | `"three/webgpu"` |
-| Driver overhead | Higher | Lower (native API) |
-| Compute shaders | Not supported | Supported (future) |
+We previously experimented with WebGPURenderer but reverted to WebGL due to browser-level context exhaustion issues. When using WebGPU with OffscreenCanvas in a Web Worker, rapid page refreshes (~5 times) would exhaust Chrome's GPU adapter pool, causing initialization failures. This is a known limitation at the intersection of WebGPU, OffscreenCanvas, and Chrome's GPU process crash protection. See [gpu-context.md](./gpu-context.md) for full details.
 
-### Fallback to WebGL
-
-If needed, WebGPU can fall back to WebGL2:
-
-```typescript
-new THREE.WebGPURenderer({ forceWebGL: true });
-```
+WebGL provides:
+- More mature and stable implementation
+- Synchronous initialization (simpler code)
+- Better browser support
+- No context exhaustion issues with rapid refreshes
 
 ## Instanced Mesh Stress Testing
 
@@ -712,6 +703,6 @@ Requires:
 - OffscreenCanvas (Chrome 69+, Firefox 105+, Safari 16.4+)
 - SharedArrayBuffer (requires COOP/COEP headers)
 - ES Modules in Workers
-- WebGPU (Chrome 113+, Firefox 127+, Safari 18+) or WebGL2 fallback
+- WebGL2 (Chrome 56+, Firefox 51+, Safari 15+)
 
 No fallback - shows error if unsupported.

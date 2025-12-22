@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import { config } from "~/shared/config";
 import type { DebugFolder } from "../../systems/debug";
 

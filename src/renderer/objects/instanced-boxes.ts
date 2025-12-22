@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 
 /**
@@ -40,7 +40,7 @@ export default class InstancedBoxes {
     // Unit box - scale applied per-instance via transform matrix
     const geometry = new THREE.BoxGeometry(1, 1, 1);
 
-    const material = new THREE.MeshStandardNodeMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0x8b4513, // Brown - matches default box color
       roughness: 0.7,
       metalness: 0.1,

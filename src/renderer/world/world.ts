@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { EntityId, DebugCollider, FootstepCallback } from "~/shared/types";
 import type Resources from "../systems/resources";
 import type Time from "../systems/time";

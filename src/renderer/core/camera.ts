@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { ViewportSize } from "~/shared/types";
 import { config } from "~/shared/config";
 import type Debug from "../systems/debug";

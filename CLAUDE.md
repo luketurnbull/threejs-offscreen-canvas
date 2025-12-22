@@ -18,7 +18,7 @@ Add `#debug` to the URL (e.g., `http://localhost:5173/#debug`) to enable:
 
 ## Architecture
 
-Multi-worker Three.js application with WebGPU rendering and Rapier physics. See `docs/architecture.md` for full details.
+Multi-worker Three.js application with WebGL rendering and Rapier physics. See `docs/architecture.md` for full details.
 
 ### Design Principles
 
@@ -33,7 +33,7 @@ Multi-worker Three.js application with WebGPU rendering and Rapier physics. See 
 
 ```
 Experience (orchestrator) - core/experience.ts
-    ├── Renderer (WebGPURenderer wrapper) - core/renderer.ts
+    ├── Renderer (WebGLRenderer wrapper) - core/renderer.ts
     ├── Camera (PerspectiveCamera + follow) - core/camera.ts
     ├── World (entities + scene objects) - world/world.ts
     │   ├── EntityFactory + EntityRegistry
@@ -62,10 +62,10 @@ src/
     debug-manager.ts      # Tweakpane + Stats.js
     components/           # UI (loading-screen, error-overlay)
     
-  renderer/               # Three.js domain code (WebGPU)
+  renderer/               # Three.js domain code
     core/
       experience.ts       # Orchestrator
-      renderer.ts         # WebGPURenderer wrapper
+      renderer.ts         # WebGLRenderer wrapper
       camera.ts           # PerspectiveCamera + follow
     world/
       world.ts            # Entity + scene management
@@ -136,7 +136,7 @@ Create in `renderer/objects/` and instantiate in `World.createSceneObjects()`:
 
 ```typescript
 // renderer/objects/my-object.ts
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type Resources from "../systems/resources";
 import type Time from "../systems/time";
 
@@ -234,16 +234,21 @@ position = lerp(previous, current, alpha);
 
 Requires COOP/COEP headers (configured in `vite.config.ts` and `vercel.json`).
 
-### WebGPU Renderer
+### WebGL Renderer
 
-Uses Three.js WebGPURenderer which requires async initialization:
+Uses Three.js WebGLRenderer with synchronous initialization:
 
 ```typescript
-import * as THREE from "three/webgpu";  // Note: webgpu import
+import * as THREE from "three";
 
-const renderer = new THREE.WebGPURenderer({ canvas, antialias: true });
-await renderer.init();  // Required before rendering
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  powerPreference: "high-performance",
+});
 ```
+
+> **Note**: We previously used WebGPU but reverted due to context exhaustion issues with OffscreenCanvas in workers. See [docs/gpu-context.md](docs/gpu-context.md) for details.
 
 ### Floating Capsule Controller
 
@@ -306,3 +311,4 @@ Must set `frustumCulled = false` on InstancedMesh when instances are scattered b
 | [docs/entities.md](docs/entities.md) | Entity component system |
 | [docs/physics.md](docs/physics.md) | Floating capsule, terrain, colliders |
 | [docs/interpolation.md](docs/interpolation.md) | Transform sync, known issues |
+| [docs/gpu-context.md](docs/gpu-context.md) | WebGPU context exhaustion issue (historical) |

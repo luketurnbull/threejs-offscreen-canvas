@@ -4,7 +4,9 @@
 
 When using WebGPU with OffscreenCanvas in a Web Worker, rapidly refreshing the page (~5 times) can cause WebGPU initialization to fail.
 
-**Status**: Unresolved - this appears to be a browser-level limitation.
+**Status**: Resolved - reverted to WebGL.
+
+> **Resolution**: Due to the browser-level nature of this issue, we reverted from WebGPU to WebGL. The project now uses `THREE.WebGLRenderer` with standard Three.js imports (`import * as THREE from "three"`). This eliminates the context exhaustion problem entirely while maintaining all functionality.
 
 ## Error Messages
 
@@ -82,39 +84,30 @@ Or via `chrome://flags`:
 - [PR #30647](https://github.com/mrdoob/three.js/pull/30647) - WebGPURenderer dispose fixes
 - [Issue #3776](https://github.com/mrdoob/three.js/issues/3776) - GPU memory leak on refresh
 
-## Potential Solutions
+## Resolution
 
-### 1. WebGL Fallback
+We chose to revert from WebGPU to WebGL for the following reasons:
 
-If WebGPU fails, fall back to WebGL:
+1. **No application-level fix exists** - The race condition between worker termination and GPU device cleanup cannot be reliably solved from application code
+2. **WebGL is mature and stable** - No context exhaustion issues with OffscreenCanvas + Workers
+3. **Minimal feature loss** - For this project's needs, WebGL2 provides all required functionality
+4. **Better browser support** - WebGL2 has wider compatibility
 
-```typescript
-const renderer = new THREE.WebGPURenderer({ 
-  antialias: true, 
-  forceWebGL: true 
-});
-```
+### Changes Made
 
-### 2. Device Recovery
+- Changed `import * as THREE from "three/webgpu"` to `import * as THREE from "three"` across all files
+- Changed `THREE.WebGPURenderer` to `THREE.WebGLRenderer`
+- Removed async `renderer.init()` call (WebGL initialization is synchronous)
+- Changed `MeshStandardNodeMaterial` to `MeshStandardMaterial` (node materials are WebGPU-specific)
 
-Retry adapter request with delay:
+### Future WebGPU Considerations
 
-```typescript
-async function getAdapter() {
-  let adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    await new Promise(r => setTimeout(r, 100));
-    adapter = await navigator.gpu.requestAdapter();
-  }
-  return adapter;
-}
-```
+WebGPU may be revisited when:
+- Chrome/Dawn improves device cleanup during worker termination
+- Three.js provides better lifecycle management for WebGPU in workers
+- A reliable cleanup mechanism becomes available
 
-### 3. File a Chromium Bug
-
-Report: "WebGPU device not released when OffscreenCanvas worker is terminated on page unload"
-
-## Conclusion
+## Historical Context
 
 This issue exists at the intersection of:
 - WebGPU (newer, less mature than WebGL)
@@ -122,7 +115,7 @@ This issue exists at the intersection of:
 - Page unload timing
 - Chrome's GPU process crash protection
 
-Until Chrome/Dawn improves WebGPU device cleanup during worker termination, this remains a browser limitation.
+The problem was discovered after upgrading from WebGL to WebGPU in commit `03c5b98`. The WebGL version never exhibited this behavior.
 
 ## References
 

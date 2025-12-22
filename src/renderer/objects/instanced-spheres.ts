@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 
 /**
@@ -40,7 +40,7 @@ export default class InstancedSpheres {
     // Unit sphere (radius 0.5, diameter 1) - scale applied per-instance
     const geometry = new THREE.SphereGeometry(0.5, 16, 12);
 
-    const material = new THREE.MeshStandardNodeMaterial({
+    const material = new THREE.MeshStandardMaterial({
       color: 0x4169e1, // Royal blue - matches default sphere color
       roughness: 0.6,
       metalness: 0.2,

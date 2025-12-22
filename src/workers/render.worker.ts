@@ -80,9 +80,6 @@ function createRenderApi(): RenderApi {
         onReady,
         onFrameTiming,
       );
-
-      // Initialize WebGPU renderer (async)
-      await experience.init();
     },
 
     resize(viewport: ViewportSize): void {

@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
 import type { RenderComponent } from "../entities";

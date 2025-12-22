@@ -1,4 +1,4 @@
-import * as THREE from "three/webgpu";
+import * as THREE from "three";
 import type {
   ViewportSize,
   SerializedInputEvent,
@@ -42,7 +42,7 @@ import World from "../world/world";
  * - Orchestrating the update loop
  *
  * This is a thin orchestrator - actual work is delegated to:
- * - Renderer: WebGPURenderer wrapper
+ * - Renderer: WebGLRenderer wrapper
  * - Camera: PerspectiveCamera + follow behavior
  * - World: Entity and scene object management
  * - TransformSync: Physics interpolation
@@ -134,18 +134,7 @@ class Experience {
       this.onReady?.();
     });
 
-    // Note: Render loop starts after init() is called
-  }
-
-  /**
-   * Initialize async systems (WebGPU renderer)
-   * Must be called before the experience can render
-   */
-  async init(): Promise<void> {
-    // Initialize WebGPU renderer (requires async adapter/device acquisition)
-    await this.renderer.init();
-
-    // Start render loop after WebGPU is ready
+    // Start render loop
     this.unsubscribeTick = this.time.on("tick", ({ delta, elapsed }) => {
       this.update(delta, elapsed);
     });
