@@ -1,8 +1,10 @@
 # GPU Context Management
 
-This document explains GPU context lifecycle, potential issues with context exhaustion, and how this project handles them.
+This document explains GPU context lifecycle, potential issues with context exhaustion, and the current state of investigation.
 
-## The Problem
+## Known Issue: Context Exhaustion on Rapid Refresh
+
+**Status**: Unresolved - investigating when this was introduced
 
 Repeatedly refreshing the page (~5+ times in quick succession) can cause WebGPU/WebGL initialization to fail:
 
@@ -12,7 +14,7 @@ THREE.WebGPURenderer: WebGPU is not available, running under WebGL2 backend.
 TypeError: Cannot read properties of null (reading 'getSupportedExtensions')
 ```
 
-This happens because browsers have strict limits on GPU contexts to prevent resource exhaustion and abuse.
+This issue appeared recently and was not present in earlier commits. Investigation is ongoing to identify the specific change that introduced it.
 
 ## Why This Happens
 
@@ -37,6 +39,7 @@ When you call `canvas.transferControlToOffscreen()`:
 - Control is **permanently** transferred to the worker
 - Main thread can no longer access the canvas context
 - Worker termination doesn't guarantee immediate GPU resource release
+- The OffscreenCanvas with a context **cannot be transferred back** ([WHATWG issue #6615](https://github.com/whatwg/html/issues/6615))
 
 ## Browser GPU Limits
 
@@ -62,11 +65,9 @@ Browsers typically allow 8-16 WebGL contexts per origin. Once exhausted:
 - `getContext("webgl2")` returns `null`
 - Fallback rendering is impossible
 
-## How We Prevent It
+## Attempted Fixes (Did Not Work)
 
-### 1. Cleanup on Page Unload
-
-**File**: `src/app/index.ts`
+### 1. beforeunload Handler
 
 ```typescript
 window.addEventListener("beforeunload", () => {
@@ -74,79 +75,24 @@ window.addEventListener("beforeunload", () => {
 });
 ```
 
-This triggers cleanup before the page unloads.
+**Why it failed**: The `dispose()` calls via Comlink are async (Promises). The page unloads before the worker can process the cleanup.
 
-### 2. Synchronous Worker Cleanup Messages
+### 2. Synchronous postMessage Cleanup
 
-**The Problem**: Comlink proxy calls (like `renderApi.dispose()`) are async and won't complete before the page unloads.
+Tried sending `{ type: "cleanup" }` directly to workers via `postMessage` to bypass Comlink's async handling.
 
-**The Solution**: Send a direct `postMessage` to workers, which they handle synchronously.
+**Why it failed**: Even with direct postMessage, the cleanup doesn't complete before the page unloads. The GPU context remains orphaned.
 
-**File**: `src/app/worker-coordinator.ts`
-
-```typescript
-cleanupSync(): void {
-  // Send cleanup message directly (bypasses Comlink's async handling)
-  this.renderWorker?.postMessage({ type: "cleanup" });
-  this.physicsWorker?.postMessage({ type: "cleanup" });
-}
-```
-
-**File**: `src/workers/render.worker.ts`
+### 3. forceContextLoss for WebGL
 
 ```typescript
-// Module-level reference for cleanup handler
-let experience: Experience | null = null;
-
-// Handle synchronous cleanup messages
-self.addEventListener("message", (event: MessageEvent) => {
-  if (event.data?.type === "cleanup") {
-    experience?.dispose();
-    experience = null;
-  }
-});
+const ext = gl.getExtension("WEBGL_lose_context");
+ext?.loseContext();
 ```
 
-This ensures the GPU context is released **before** the page unloads, not after.
+**Why it failed**: This only helps if the cleanup code actually executes before unload, which it doesn't due to the async nature of worker communication.
 
-### 3. Force WebGL Context Loss
-
-**File**: `src/renderer/core/renderer.ts`
-
-When running under WebGL2 backend, we explicitly release the context:
-
-```typescript
-dispose(): void {
-  // Force WebGL context loss
-  const gl = (this.instance as any).backend?.gl;
-  if (gl) {
-    const ext = gl.getExtension("WEBGL_lose_context");
-    ext?.loseContext();
-  }
-  
-  this.instance.dispose();
-}
-```
-
-This is the recommended pattern from [Three.js issue #27100](https://github.com/mrdoob/three.js/issues/27100).
-
-### 4. Device Loss Handling
-
-**File**: `src/renderer/core/renderer.ts`
-
-We listen for GPU device loss events:
-
-```typescript
-device.lost.then((info: GPUDeviceLostInfo) => {
-  console.warn(`[Renderer] GPU device lost (${reason}): ${message}`);
-});
-```
-
-This helps diagnose issues and could enable future recovery mechanisms.
-
-## If It Still Happens
-
-If you encounter GPU context exhaustion:
+## If It Happens
 
 ### For Users
 
@@ -177,46 +123,20 @@ GPU device loss can happen for several reasons:
 | System sleep/resume | GPU state was reset |
 | Explicit destroy | `device.destroy()` was called |
 
-## Best Practices
+## Future Investigation
 
-### Do
+To resolve this issue, we need to:
 
-- ✅ Always call `dispose()` when done with renderer
-- ✅ Add `beforeunload` handler for cleanup
-- ✅ Use `forceContextLoss()` for WebGL contexts
-- ✅ Listen for `device.lost` events
-- ✅ Handle `requestAdapter()` returning `null`
-
-### Don't
-
-- ❌ Create multiple renderers without disposing old ones
-- ❌ Ignore cleanup on hot module replacement (HMR)
-- ❌ Assume GPU contexts are unlimited
-- ❌ Skip error handling for GPU initialization
-
-## Recovery Strategies
-
-From [WebGPU Device Loss Best Practices](https://toji.dev/webgpu-best-practices/device-loss.html):
-
-1. **Minimum**: Display message suggesting page refresh
-2. **Better**: Reinitialize WebGPU independently from page
-3. **Best**: Save state to localStorage, reconstruct after recovery
-
-Currently, this project uses the minimum approach. The user sees an error message and can refresh the page.
-
-## Related Files
-
-| File | Purpose |
-|------|---------|
-| `src/app/index.ts` | `beforeunload` handler |
-| `src/renderer/core/renderer.ts` | GPU cleanup and device loss handling |
-| `src/app/components/error-overlay.ts` | `GPU_CONTEXT_EXHAUSTED` message |
-| `src/app/worker-coordinator.ts` | Worker termination |
+1. **Bisect commits** to find when the issue was introduced
+2. **Check for GPU resource leaks** in recent changes
+3. **Review Three.js WebGPURenderer changes** if the issue correlates with a Three.js update
+4. **Consider alternative architectures** that don't use OffscreenCanvas transfer
 
 ## References
 
 - [WebGPU Troubleshooting (Chrome)](https://developer.chrome.com/docs/web-platform/webgpu/troubleshooting-tips)
 - [WebGPU Device Loss Best Practices](https://toji.dev/webgpu-best-practices/device-loss.html)
 - [Three.js Context Release Issue](https://github.com/mrdoob/three.js/issues/27100)
+- [OffscreenCanvas Transfer Limitations](https://github.com/whatwg/html/issues/6615)
 - [GPUDeviceLostInfo (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/GPUDeviceLostInfo)
 - [WEBGL_lose_context (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/WEBGL_lose_context)
