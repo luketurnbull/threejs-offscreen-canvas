@@ -217,24 +217,6 @@ function createRenderApi(): RenderApi {
     },
 
     // ============================================
-    // Legacy Methods (deprecated)
-    // ============================================
-
-    async spawnCubes(entityIds: EntityId[], size: number): Promise<void> {
-      for (const id of entityIds) {
-        assertValidEntityId(id, "RenderApi.spawnCubes");
-      }
-      await assertExperienceInitialized().spawnCubes(entityIds, size);
-    },
-
-    removeCubes(entityIds: EntityId[]): void {
-      for (const id of entityIds) {
-        assertValidEntityId(id, "RenderApi.removeCubes");
-      }
-      assertExperienceInitialized().removeCubes(entityIds);
-    },
-
-    // ============================================
     // Raycasting
     // ============================================
 

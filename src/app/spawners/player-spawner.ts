@@ -11,7 +11,7 @@ import type { RenderApi } from "~/shared/types/render-api";
 import type { SharedTransformBuffer } from "~/shared/buffers/transform-buffer";
 import { createEntityId, type EntityId } from "~/shared/types";
 import { config } from "~/shared/config";
-import type { SpawnPlayerCommand } from "../types";
+import type { SpawnPlayerCommand } from "./types";
 
 export default class PlayerSpawner {
   private playerId: EntityId | null = null;

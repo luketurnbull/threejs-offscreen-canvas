@@ -10,7 +10,7 @@ import type { PhysicsApi } from "~/shared/types/physics-api";
 import type { RenderApi } from "~/shared/types/render-api";
 import type { SharedTransformBuffer } from "~/shared/buffers/transform-buffer";
 import { createEntityId, type EntityId } from "~/shared/types";
-import { DEFAULT_SIZES, type SpawnSphereCommand } from "../types";
+import { DEFAULT_SIZES, type SpawnSphereCommand } from "./types";
 
 export default class SphereSpawner {
   private entityIds: Set<EntityId> = new Set();

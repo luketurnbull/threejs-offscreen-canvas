@@ -15,8 +15,8 @@ import {
   SphereSpawner,
   PlayerSpawner,
   WorldSpawner,
-} from "./spawners";
-import type { SpawnBoxCommand, SpawnSphereCommand } from "./types";
+} from "../spawners";
+import type { SpawnBoxCommand, SpawnSphereCommand } from "../spawners/types";
 
 export default class EntityCoordinator {
   private worldSpawner: WorldSpawner;
@@ -255,4 +255,4 @@ export default class EntityCoordinator {
 }
 
 // Re-export types
-export * from "./types";
+export * from "../spawners/types";

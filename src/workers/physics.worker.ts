@@ -128,28 +128,6 @@ function createPhysicsApi(): PhysicsApi {
     },
 
     // ============================================
-    // Legacy Methods (deprecated)
-    // ============================================
-
-    async spawnCubes(
-      entityIds: EntityId[],
-      positions: Float32Array,
-      size: number,
-    ): Promise<void> {
-      for (const id of entityIds) {
-        assertValidEntityId(id, "PhysicsApi.spawnCubes");
-      }
-      assertPhysicsInitialized().spawnCubes(entityIds, positions, size);
-    },
-
-    async removeCubes(entityIds: EntityId[]): Promise<void> {
-      for (const id of entityIds) {
-        assertValidEntityId(id, "PhysicsApi.removeCubes");
-      }
-      assertPhysicsInitialized().removeCubes(entityIds);
-    },
-
-    // ============================================
     // Player Control
     // ============================================
 

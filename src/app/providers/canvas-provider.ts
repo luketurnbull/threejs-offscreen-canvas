@@ -1,9 +1,9 @@
 import type { ViewportSize } from "~/shared/types";
 
 /**
- * Manages canvas element and OffscreenCanvas transfer.
+ * Provides canvas element and OffscreenCanvas transfer.
  */
-export default class CanvasManager {
+export default class CanvasProvider {
   private canvas: HTMLCanvasElement;
   private _offscreen: OffscreenCanvas | null = null;
   private _transferred: boolean = false;

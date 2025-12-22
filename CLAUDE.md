@@ -1,98 +1,107 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Writing Style
+ALWAYS be extremely concise. Sacrifice grammar for concision.
 
 ## Commands
 
-- **Dev server**: `bun run dev` - Start Vite dev server with HMR
-- **Build**: `bun run build` - TypeScript check + Vite production build
-- **Preview**: `bun run preview` - Preview production build locally
+- `bun run dev` - Dev server with HMR
+- `bun run build` - TypeScript check + production build
+- `bun run preview` - Preview production build
 
 ## Debug Mode
 
-Add `#debug` to the URL (e.g., `http://localhost:5173/#debug`) to enable:
-- Tweakpane debug UI (renderer, camera, physics settings)
-- Stats.js performance monitor (FPS, MS, MB)
-- Physics collider visualization (green wireframes)
-- Cube Storm controls (spawn/clear physics cubes for stress testing)
+Add `#debug` to URL for: Tweakpane UI, Stats.js, physics collider wireframes, cube storm controls.
 
 ## Architecture
 
-Multi-worker Three.js application with WebGL rendering and Rapier physics. See `docs/architecture.md` for full details.
+Multi-worker Three.js + Rapier physics. See `docs/architecture.md`.
 
 ### Design Principles
 
-1. **Workers are thin** - Worker files (`src/workers/`) are just Comlink entry points, all logic lives in domain modules
-2. **Domain-based organization** - Code organized by what it does (`renderer/`, `physics/`), not where it runs
-3. **Experience/World/Renderer pattern** - Bruno Simon-style architecture with dependency injection (no singletons)
-4. **Centralized config** - All settings in `src/shared/config.ts`
-5. **Explicit contracts** - `shared/` contains only cross-worker types, buffers, and utilities
-6. **Zero-copy sync** - Physics writes to SharedArrayBuffer, render reads with interpolation
-
-### Experience/World/Renderer Pattern
-
-```
-Experience (orchestrator) - core/experience.ts
-    ├── Renderer (WebGLRenderer wrapper) - core/renderer.ts
-    ├── Camera (PerspectiveCamera + follow) - core/camera.ts
-    ├── World (entities + scene objects) - world/world.ts
-    │   ├── EntityFactory + EntityRegistry
-    │   ├── Floor, Environment
-    │   ├── InstancedCubes
-    │   └── PhysicsDebugRenderer
-    ├── TransformSync (physics interpolation) - sync/transform-sync.ts
-    └── Time, Debug, Resources, InputState - systems/
-```
+1. **Thin workers** - Worker files are Comlink entry points only
+2. **Domain-based** - Code by function (`renderer/`, `physics/`), not location
+3. **Experience/World/Renderer** - Bruno Simon pattern, dependency injection
+4. **Centralized config** - `src/shared/config.ts`
+5. **Explicit contracts** - `shared/` for cross-worker types only
+6. **Zero-copy sync** - SharedArrayBuffer for physics→render
 
 ### Project Structure
 
 ```
 src/
-  main.ts                 # Entry point
+  main.ts                    # Entry
   
-  app/                    # Main thread orchestration
-    index.ts              # App class (coordinator)
-    worker-coordinator.ts # Worker lifecycle management
-    entity-spawner.ts     # Entity creation across workers
-    input-router.ts       # Input event routing
-    audio-bridge.ts       # Audio callback wiring
-    audio-manager.ts      # Web Audio API (main thread only)
-    canvas-manager.ts     # OffscreenCanvas transfer
-    input-manager.ts      # Keyboard event capture
-    debug-manager.ts      # Tweakpane + Stats.js
-    components/           # UI (loading-screen, error-overlay)
+  app/                       # Main thread
+    index.ts                 # App orchestrator
+    coordinators/
+      worker-coordinator.ts  # Worker lifecycle
+      entity-coordinator.ts  # Entity orchestration
+    managers/
+      audio-manager.ts       # Web Audio
+      input-manager.ts       # DOM events
+      debug/                 # Tweakpane + Stats.js
+        index.ts             # DebugManager facade
+        tweakpane-manager.ts
+        stats-manager.ts
+    handlers/
+      resize-handler.ts
+      spawn-handler.ts
+    bridges/
+      audio-bridge.ts        # Audio→worker wiring
+    routing/
+      input-router.ts        # Input→workers
+    providers/
+      canvas-provider.ts     # OffscreenCanvas
+    utils/
+      load-progress-tracker.ts
+    spawners/
+      box-spawner.ts
+      sphere-spawner.ts
+      player-spawner.ts
+      world-spawner.ts
+    ui/
+      ui-manager.ts          # UI lifecycle
+    components/
+      loading-screen.ts
+      error-overlay.ts
+      entity-spawner-ui.ts
     
-  renderer/               # Three.js domain code
+  renderer/                  # Three.js (worker)
     core/
-      experience.ts       # Orchestrator
-      renderer.ts         # WebGLRenderer wrapper
-      camera.ts           # PerspectiveCamera + follow
+      experience.ts          # Orchestrator
+      renderer.ts            # WebGLRenderer
+      camera.ts              # Follow camera
     world/
-      world.ts            # Entity + scene management
-      environment.ts      # Lighting
+      world.ts               # Entities + scene
+      environment.ts         # Lighting
     entities/
-      types.ts            # RenderComponent interface
-      index.ts            # EntityFactory + Registry
-      components/         # player, ground, dynamic-box, etc.
-    objects/              # Visual components (fox, floor, instanced-cubes)
+      types.ts
+      index.ts               # Factory + Registry
+      components/            # player, ground, etc.
+    objects/
+      instanced-mesh-base.ts # Abstract base
+      instanced-boxes.ts
+      instanced-spheres.ts
+      fox.ts, floor.ts
     sync/
-      transform-sync.ts   # Physics interpolation
+      transform-sync.ts      # Interpolation
       physics-debug-renderer.ts
-    systems/              # time, resources, debug, input-state
+    systems/                 # time, resources, debug
     
-  physics/                # Rapier domain code
-    physics-world.ts      # World + body management
-    floating-capsule-controller.ts  # Player controller
+  physics/                   # Rapier (worker)
+    physics-world.ts
+    floating-capsule-controller.ts
     
-  workers/                # Thin worker entry points
-    render.worker.ts      # Comlink.expose(renderApi)
-    physics.worker.ts     # Comlink.expose(physicsApi)
+  workers/                   # Thin entry points
+    render.worker.ts
+    physics.worker.ts
     
-  shared/                 # Cross-worker types, buffers, config
-    config.ts             # Centralized configuration
-    types/                # EntityId, API interfaces
-    buffers/              # SharedTransformBuffer
-    utils/                # EventEmitter, noise, terrain
+  shared/                    # Cross-worker
+    config.ts
+    types/
+    buffers/
+    utils/
 ```
 
 ### Path Aliases
@@ -101,214 +110,93 @@ src/
 - `~/shared` → `src/shared/`
 - `~/shaders` → `src/shaders/`
 
-Domain folders (`renderer/`, `physics/`) use relative imports internally.
+Domain folders use relative imports.
 
 ### Configuration
 
-All settings live in `src/shared/config.ts`:
+All in `src/shared/config.ts`:
 
 ```typescript
-import { config } from "~/shared/config";
-
-config.renderer.clearColor           // "#211d20"
-config.renderer.toneMappingExposure  // 1.75
-config.camera.fov                    // 35
-config.camera.follow.distance        // 10
-config.physics.gravity               // { x: 0, y: -20, z: 0 }
-config.floatingCapsule.springStrength // 1.2
-config.floatingCapsule.jumpForce     // 8
-config.terrain.amplitude             // 2.5
-config.entities.maxCount             // 1000
+config.renderer.clearColor
+config.camera.follow.distance
+config.physics.gravity
+config.floatingCapsule.springStrength
+config.terrain.amplitude
+config.entities.maxCount
 ```
 
 ## Key Patterns
 
-### Adding a New Worker
+### Adding Workers
 
-1. Create domain folder: `src/audio/index.ts`
-2. Create thin worker entry: `src/workers/audio.worker.ts`
-3. Add API types: `src/shared/types/audio-api.ts`
+1. Domain folder: `src/audio/index.ts`
+2. Thin entry: `src/workers/audio.worker.ts`
+3. API types: `src/shared/types/audio-api.ts`
 4. Add to WorkerCoordinator
 
 ### Adding Scene Objects
 
-Create in `renderer/objects/` and instantiate in `World.createSceneObjects()`:
-
-```typescript
-// renderer/objects/my-object.ts
-import * as THREE from "three";
-import type Resources from "../systems/resources";
-import type Time from "../systems/time";
-
-export default class MyObject {
-  private scene: THREE.Scene;
-  private mesh: THREE.Mesh;
-  private unsubscribeTick: (() => void) | null = null;
-
-  constructor(scene: THREE.Scene, resources: Resources, time: Time) {
-    this.scene = scene;
-    
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-    this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow = true;
-    this.scene.add(this.mesh);
-
-    this.unsubscribeTick = time.on("tick", ({ elapsed }) => {
-      this.mesh.rotation.y = elapsed * 0.001;
-    });
-  }
-
-  dispose(): void {
-    this.unsubscribeTick?.();
-    this.mesh.geometry.dispose();
-    (this.mesh.material as THREE.Material).dispose();
-    this.scene.remove(this.mesh);
-  }
-}
-```
+Create in `renderer/objects/`, instantiate in `World.createSceneObjects()`.
 
 ### Adding Entity Types
 
-Create in `renderer/entities/components/` and register in `renderer/entities/index.ts`:
+Create in `renderer/entities/components/`, register in `renderer/entities/index.ts`.
 
-```typescript
-// renderer/entities/components/tree.ts
-import type { EntityId } from "~/shared/types";
-import type { RenderComponent, EntityContext } from "../types";
-
-export function createTreeEntity(
-  id: EntityId,
-  context: EntityContext,
-  data?: Record<string, unknown>
-): RenderComponent {
-  // Create mesh, add to scene
-  return {
-    id,
-    type: "tree",
-    object: mesh,
-    onRenderFrame(delta, elapsed) { /* animate */ },
-    dispose() { /* cleanup */ },
-  };
-}
-
-// In renderer/entities/index.ts
-entityRegistry.register("tree", createTreeEntity);
-```
-
-Entity lifecycle hooks:
-- `onTransformUpdate(pos, quat)` - After interpolated transform applied
-- `onPhysicsFrame(inputState)` - New physics frame arrives (~60Hz)
-- `onRenderFrame(delta, elapsed)` - Every render frame
-- `dispose()` - Cleanup when removed
+Lifecycle hooks: `onTransformUpdate`, `onPhysicsFrame`, `onRenderFrame`, `dispose`.
 
 ### Entity System
 
-Entities have a unique `EntityId` tracked across workers. See `docs/entities.md`.
-
 ```typescript
-import { createEntityId } from "~/shared/types";
-
-const id = createEntityId();  // Branded number type
+const id = createEntityId();
 sharedBuffer.registerEntity(id);
 await physicsApi.spawnEntity(id, transform, bodyConfig);
 await renderApi.spawnEntity(id, "player");
 ```
 
-### SharedArrayBuffer Transform Sync
+### SharedArrayBuffer Sync
 
-Physics writes transforms, Render reads with interpolation. See `docs/interpolation.md`.
+Physics writes transforms at 60Hz, Render interpolates. See `docs/interpolation.md`.
 
-```typescript
-// Physics worker writes (60Hz)
-sharedBuffer.writeTransform(index, posX, posY, posZ, rotX, rotY, rotZ, rotW);
-sharedBuffer.writeFrameTiming(performance.now(), PHYSICS_INTERVAL);
-sharedBuffer.signalFrameComplete();
-
-// Render worker reads and interpolates
-const timing = sharedBuffer.readFrameTiming();
-const alpha = (now - timing.currentTime) / timing.interval;
-const transform = sharedBuffer.readTransform(index);
-position = lerp(previous, current, alpha);
-```
-
-Requires COOP/COEP headers (configured in `vite.config.ts` and `vercel.json`).
-
-### WebGL Renderer
-
-Uses Three.js WebGLRenderer with synchronous initialization:
-
-```typescript
-import * as THREE from "three";
-
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: true,
-  powerPreference: "high-performance",
-});
-```
-
-> **Note**: We previously used WebGPU but reverted due to context exhaustion issues with OffscreenCanvas in workers. See [docs/gpu-context.md](docs/gpu-context.md) for details.
+Requires COOP/COEP headers (configured in `vite.config.ts`, `vercel.json`).
 
 ### Floating Capsule Controller
 
-Player uses dynamic rigidbody with spring-damper floating, not kinematic. See `docs/physics.md`.
-
-Key features:
-- Spring force keeps character hovering above ground
-- Impulse-based movement forces
-- Jump with coyote time (150ms grace period) and input buffering
-- Ground detection via raycast
+Dynamic rigidbody with spring-damper floating. See `docs/physics.md`.
 
 ### Procedural Terrain
 
-Both physics and render generate identical terrain using seeded Simplex noise:
+Seeded Simplex noise, identical in both workers:
 
 ```typescript
-import { generateTerrainHeights, getHeightAt } from "~/shared/utils/terrain";
-
 const heights = generateTerrainHeights(config.terrain);
 const y = getHeightAt(x, z, heights, config.terrain);
 ```
 
-### GPU Instancing for Stress Testing
+### GPU Instancing
 
-`InstancedCubes` renders up to 1000 physics cubes in a single draw call:
+`InstancedBoxes`/`InstancedSpheres` extend `InstancedMeshBase`:
 
 ```typescript
-// Important settings for instanced meshes with physics
 mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-mesh.frustumCulled = false;  // Instances scattered across large area
-mesh.instanceMatrix.needsUpdate = true;  // After batch updates
+mesh.frustumCulled = false;  // Physics scatters instances
 ```
 
 ## GLSL Shaders
 
-- **Co-locate with component**: `renderer/objects/plane/vertex.vert`
-- **Shared utilities**: `src/shaders/` for reusable GLSL chunks
-
-```typescript
-import vertexShader from "./vertex.vert";
-import fragmentShader from "./fragment.frag";
-```
+Co-locate with component or use `src/shaders/` for shared utilities.
 
 ## Known Issues
 
-### First Load Vibration
-Brief character vibration on cold page load, resolves on reload. Worker initialization race condition.
-
-### Subtle Movement Vibration
-Ongoing interpolation timing issue. `setTimeout` jitter in physics worker causes minor inconsistencies. Documented in `docs/interpolation.md` with potential fixes.
-
-### InstancedMesh Frustum Culling
-Must set `frustumCulled = false` on InstancedMesh when instances are scattered by physics. Otherwise all cubes disappear when camera moves (base geometry bounding sphere is tiny).
+- **First load vibration** - Worker init race, resolves on reload
+- **Movement vibration** - `setTimeout` jitter in physics. See `docs/interpolation.md`
+- **InstancedMesh culling** - Must disable `frustumCulled` when physics scatters instances
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [docs/architecture.md](docs/architecture.md) | Full system design, worker patterns |
-| [docs/entities.md](docs/entities.md) | Entity component system |
-| [docs/physics.md](docs/physics.md) | Floating capsule, terrain, colliders |
-| [docs/interpolation.md](docs/interpolation.md) | Transform sync, known issues |
-| [docs/gpu-context.md](docs/gpu-context.md) | WebGPU context exhaustion issue (historical) |
+| Doc | Content |
+|-----|---------|
+| `docs/architecture.md` | System design |
+| `docs/entities.md` | Entity system |
+| `docs/physics.md` | Floating capsule, terrain |
+| `docs/interpolation.md` | Transform sync |
+| `docs/gpu-context.md` | WebGPU issues (historical) |

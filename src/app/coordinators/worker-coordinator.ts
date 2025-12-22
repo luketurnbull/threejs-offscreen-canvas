@@ -5,8 +5,8 @@ import {
   isSharedArrayBufferSupported,
 } from "~/shared/buffers/transform-buffer";
 import { config } from "~/shared/config";
-import LoadProgressTracker from "./load-progress-tracker";
-import AudioBridge from "./audio-bridge";
+import LoadProgressTracker from "../utils/load-progress-tracker";
+import AudioBridge from "../bridges/audio-bridge";
 
 export interface WorkerCallbacks {
   onProgress?: (progress: number) => void;
@@ -94,7 +94,7 @@ export default class WorkerCoordinator {
     onProgress: (progress: number) => void,
   ): Promise<void> {
     this.renderWorker = new Worker(
-      new URL("../workers/render.worker.ts", import.meta.url),
+      new URL("../../workers/render.worker.ts", import.meta.url),
       { type: "module" },
     );
 
@@ -122,7 +122,7 @@ export default class WorkerCoordinator {
     onProgress: (progress: number) => void,
   ): Promise<void> {
     this.physicsWorker = new Worker(
-      new URL("../workers/physics.worker.ts", import.meta.url),
+      new URL("../../workers/physics.worker.ts", import.meta.url),
       { type: "module" },
     );
 

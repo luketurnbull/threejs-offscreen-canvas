@@ -328,24 +328,6 @@ export default class PhysicsWorld {
     }
   }
 
-  /**
-   * @deprecated Use spawnBodies with type: 'box' instead
-   */
-  spawnCubes(
-    entityIds: EntityId[],
-    positions: Float32Array,
-    size: number,
-  ): void {
-    this.spawnBodies(entityIds, positions, { type: "box", size });
-  }
-
-  /**
-   * @deprecated Use removeBodies instead
-   */
-  removeCubes(entityIds: EntityId[]): void {
-    this.removeBodies(entityIds);
-  }
-
   removeEntity(id: EntityId): void {
     if (!this.world) return;
 

@@ -10,7 +10,7 @@ import type { CollisionCallback, PlayerStateCallback } from "./audio-events";
  */
 export interface PhysicsBodyConfig {
   type: "static" | "dynamic" | "kinematic";
-  colliderType: "cuboid" | "capsule" | "ball" | "trimesh" | "heightfield";
+  colliderType: "cuboid" | "capsule" | "ball" | "heightfield";
   dimensions: { x: number; y: number; z: number }; // For cuboid
   radius?: number; // For capsule/ball
   height?: number; // For capsule
@@ -168,24 +168,6 @@ export interface PhysicsApi {
    * Remove multiple physics bodies at once
    */
   removeBodies(entityIds: EntityId[]): Promise<void>;
-
-  // ============================================
-  // Legacy Methods (deprecated, for backwards compatibility)
-  // ============================================
-
-  /**
-   * @deprecated Use spawnBodies with type: 'box' instead
-   */
-  spawnCubes(
-    entityIds: EntityId[],
-    positions: Float32Array,
-    size: number,
-  ): Promise<void>;
-
-  /**
-   * @deprecated Use removeBodies instead
-   */
-  removeCubes(entityIds: EntityId[]): Promise<void>;
 
   // ============================================
   // Player Control

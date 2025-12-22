@@ -1,20 +1,20 @@
 /**
- * SpawnController - Orchestrates click-to-spawn mechanics
+ * SpawnHandler - Handles click-to-spawn events
  *
- * Handles:
- * - Receiving canvas click events with normalized coordinates
- * - Raycasting to find spawn direction
- * - Calculating spawn position and velocity
- * - Spawning entities via EntityCoordinator
+ * Responsibilities:
+ * - Receives canvas click events
+ * - Raycasts to find spawn direction
+ * - Calculates spawn position and velocity
+ * - Spawns entities via EntityCoordinator
  */
 
 import type { Remote } from "comlink";
 import type { RenderApi, SerializedClickEvent } from "~/shared/types";
 import { config } from "~/shared/config";
-import type { EntitySpawnerUI } from "./components/entity-spawner-ui";
-import type EntityCoordinator from "./entities";
+import type { EntitySpawnerUI } from "../components/entity-spawner-ui";
+import type EntityCoordinator from "../coordinators/entity-coordinator";
 
-export default class SpawnController {
+export default class SpawnHandler {
   private ui: EntitySpawnerUI;
   private entities: EntityCoordinator;
   private renderApi: Remote<RenderApi>;

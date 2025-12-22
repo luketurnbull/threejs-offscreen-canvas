@@ -363,30 +363,6 @@ class Experience {
   }
 
   // ============================================
-  // Legacy Methods (deprecated, for backwards compatibility)
-  // ============================================
-
-  /**
-   * @deprecated Use addBoxes instead
-   */
-  async spawnCubes(entityIds: EntityId[], size: number): Promise<void> {
-    // Wait for resources with timeout
-    await this.waitForResources();
-
-    this.world.spawnCubes(entityIds, size);
-
-    // Rebuild shared buffer entity map after spawn
-    this.transformSync.rebuildEntityMap();
-  }
-
-  /**
-   * @deprecated Use removeBoxes instead
-   */
-  removeCubes(entityIds: EntityId[]): void {
-    this.world.removeCubes(entityIds);
-  }
-
-  // ============================================
   // Audio Callbacks
   // ============================================
 

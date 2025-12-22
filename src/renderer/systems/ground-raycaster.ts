@@ -55,14 +55,6 @@ export default class GroundRaycaster {
     };
   }
 
-  /**
-   * Set the ground plane height
-   * @param height Y position of the ground plane
-   */
-  setGroundHeight(height: number): void {
-    this.groundPlane.constant = -height;
-  }
-
   dispose(): void {
     // Nothing to dispose, but included for consistency
   }

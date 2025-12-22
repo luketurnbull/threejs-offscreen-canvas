@@ -8,7 +8,7 @@ import type {
   FootstepEvent,
   ListenerUpdate,
 } from "~/shared/types";
-import AudioManager from "./audio-manager";
+import AudioManager from "../managers/audio-manager";
 
 /**
  * AudioBridge - Connects worker events to AudioManager

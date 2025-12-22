@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { SoundPool } from "../audio";
+import { SoundPool } from "../../audio";
 import { config } from "~/shared/config";
 import type {
   FootstepEvent,

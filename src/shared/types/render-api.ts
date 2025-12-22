@@ -170,20 +170,6 @@ export interface RenderApi {
   clearAllInstances(): void;
 
   // ============================================
-  // Legacy Methods (deprecated, for backwards compatibility)
-  // ============================================
-
-  /**
-   * @deprecated Use addBoxes instead
-   */
-  spawnCubes(entityIds: EntityId[], size: number): Promise<void>;
-
-  /**
-   * @deprecated Use removeBoxes instead
-   */
-  removeCubes(entityIds: EntityId[]): void;
-
-  // ============================================
   // Lifecycle
   // ============================================
 

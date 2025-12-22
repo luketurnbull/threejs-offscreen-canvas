@@ -319,34 +319,6 @@ class World {
     this.clearSpheres();
   }
 
-  // ============================================
-  // Legacy cube methods (for backwards compatibility during transition)
-  // ============================================
-
-  /**
-   * @deprecated Use addBoxes instead
-   */
-  spawnCubes(entityIds: EntityId[], size: number): void {
-    if (!this.instancedBoxes) return;
-
-    const scales = entityIds.map(() => ({ x: size, y: size, z: size }));
-    this.instancedBoxes.addBoxes(entityIds, scales);
-  }
-
-  /**
-   * @deprecated Use removeBoxes instead
-   */
-  removeCubes(entityIds: EntityId[]): void {
-    this.removeBoxes(entityIds);
-  }
-
-  /**
-   * @deprecated Use clearBoxes instead
-   */
-  clearCubes(): void {
-    this.clearBoxes();
-  }
-
   /**
    * Get all debug colliders (for PhysicsDebugRenderer)
    */
