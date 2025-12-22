@@ -51,8 +51,9 @@ export default class AudioManager {
   /**
    * Initialize audio system
    * Must be called after user interaction due to browser autoplay policy
+   * @param onProgress - Optional callback for loading progress (0-1)
    */
-  async init(): Promise<void> {
+  async init(onProgress?: (progress: number) => void): Promise<void> {
     if (this.isInitialized) return;
 
     // Get the AudioContext from the listener (created lazily)
@@ -85,15 +86,18 @@ export default class AudioManager {
     this.landSound.setVolume(config.audio.player.landVolume);
 
     // Load audio assets
-    await this.loadAssets();
+    await this.loadAssets(onProgress);
 
     this.isInitialized = true;
   }
 
   /**
    * Load all audio assets
+   * @param onProgress - Optional callback for loading progress (0-1)
    */
-  private async loadAssets(): Promise<void> {
+  private async loadAssets(
+    onProgress?: (progress: number) => void,
+  ): Promise<void> {
     const loader = new THREE.AudioLoader();
 
     // Define assets to load
@@ -114,6 +118,13 @@ export default class AudioManager {
       { name: "land", paths: ["audio/land.mp3"] },
     ];
 
+    // Count total files for progress tracking
+    const totalFiles = assetGroups.reduce(
+      (sum, group) => sum + group.paths.length,
+      0,
+    );
+    let loadedFiles = 0;
+
     // Load all assets
     for (const group of assetGroups) {
       const buffers: AudioBuffer[] = [];
@@ -125,6 +136,10 @@ export default class AudioManager {
         } catch {
           console.warn(`[AudioManager] Failed to load: ${path}`);
         }
+
+        // Update progress after each file (success or failure)
+        loadedFiles++;
+        onProgress?.(loadedFiles / totalFiles);
       }
 
       if (buffers.length > 0) {

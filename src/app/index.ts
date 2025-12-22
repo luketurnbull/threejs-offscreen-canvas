@@ -103,12 +103,28 @@ export default class App {
     const offscreen = this.canvas.transferToOffscreen();
     const viewport = this.canvas.getViewport();
 
+    // Progress tracking - audio is 20%, render assets are 80%
+    const AUDIO_WEIGHT = 0.2;
+    const RENDER_WEIGHT = 0.8;
+    let audioProgress = 0;
+    let renderProgress = 0;
+
+    const updateCombinedProgress = (): void => {
+      const combined =
+        audioProgress * AUDIO_WEIGHT + renderProgress * RENDER_WEIGHT;
+      this.handleLoadProgress(combined);
+    };
+
     // Initialize audio and workers in parallel
     await Promise.all([
-      this.audioBridge.init(),
+      this.audioBridge.init((progress: number) => {
+        audioProgress = progress;
+        updateCombinedProgress();
+      }),
       this.coordinator.init(offscreen, viewport, this.debug.active, {
         onProgress: (progress: number) => {
-          this.handleLoadProgress(progress);
+          renderProgress = progress;
+          updateCombinedProgress();
         },
         onReady: () => {
           // Resources loaded, show start button

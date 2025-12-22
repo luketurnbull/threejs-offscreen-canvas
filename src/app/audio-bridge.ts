@@ -25,9 +25,10 @@ export default class AudioBridge {
 
   /**
    * Initialize audio assets (async loading)
+   * @param onProgress - Optional callback for loading progress (0-1)
    */
-  async init(): Promise<void> {
-    await this.audioManager.init();
+  async init(onProgress?: (progress: number) => void): Promise<void> {
+    await this.audioManager.init(onProgress);
   }
 
   /**
