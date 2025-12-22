@@ -1,12 +1,12 @@
-# GPU Context Management
+# WebGPU Context Exhaustion Issue
 
-This document explains GPU context lifecycle, potential issues with context exhaustion, and the current state of investigation.
+## Overview
 
-## Known Issue: Context Exhaustion on Rapid Refresh
+When using WebGPU with OffscreenCanvas in a Web Worker, rapidly refreshing the page (~5 times) can cause WebGPU initialization to fail.
 
-**Status**: Unresolved - investigating when this was introduced
+**Status**: Unresolved - this appears to be a browser-level limitation.
 
-Repeatedly refreshing the page (~5+ times in quick succession) can cause WebGPU/WebGL initialization to fail:
+## Error Messages
 
 ```
 Failed to create WebGPU Context Provider
@@ -14,129 +14,119 @@ THREE.WebGPURenderer: WebGPU is not available, running under WebGL2 backend.
 TypeError: Cannot read properties of null (reading 'getSupportedExtensions')
 ```
 
-This issue appeared recently and was not present in earlier commits. Investigation is ongoing to identify the specific change that introduced it.
+## Root Cause
 
-## Why This Happens
+### Chrome's GPU Process Crash Limits
 
-### Architecture Context
+Chrome enforces strict limits on GPU adapter allocation after failures:
 
-This application uses:
-- **OffscreenCanvas**: Transferred to a Web Worker for rendering
-- **WebGPURenderer**: Three.js's WebGPU-based renderer (falls back to WebGL2)
-- **Web Workers**: Render and physics run in separate threads
+| Failures | Consequence |
+|----------|-------------|
+| 1st | Can still get new adapter |
+| 2nd within 2 min | Page blocked from adapters |
+| 3rd within 2 min | ALL pages blocked from adapters |
+| 3-6 in 5 min | GPU process stops; browser restart required |
 
-### The Lifecycle Problem
+### Why This Happens
 
-1. **Page loads**: Worker acquires GPU device via `navigator.gpu.requestAdapter()`
-2. **User refreshes**: Main thread unloads, but worker cleanup is async
-3. **New page loads**: Tries to acquire new GPU device
-4. **Problem**: Old device may still be held by terminated worker
-5. **After ~5 refreshes**: Chrome's GPU process is exhausted
+1. **OffscreenCanvas + Worker + WebGPU** creates complex resource ownership
+2. Page refresh terminates the worker abruptly
+3. GPU device in worker is orphaned (not properly destroyed)
+4. Chrome interprets orphaned devices as "crashes"
+5. After several refreshes, adapter limits are hit
 
-### OffscreenCanvas Complication
+### The Race Condition
 
-When you call `canvas.transferControlToOffscreen()`:
-- Control is **permanently** transferred to the worker
-- Main thread can no longer access the canvas context
-- Worker termination doesn't guarantee immediate GPU resource release
-- The OffscreenCanvas with a context **cannot be transferred back** ([WHATWG issue #6615](https://github.com/whatwg/html/issues/6615))
+When attempting cleanup:
+1. `beforeunload` fires on main thread
+2. Cleanup message sent to worker
+3. `worker.terminate()` called immediately
+4. Worker may be terminated before processing cleanup
+5. GPU device destruction timing is not guaranteed
 
-## Browser GPU Limits
+## What We Tried (All Failed)
 
-### Chrome's Rules
+1. **beforeunload + dispose()** - Async Comlink calls don't complete
+2. **Direct postMessage cleanup** - Race condition with terminate()
+3. **Explicit device.destroy()** - Never executes due to race
+4. **forceContextLoss()** - Only helps WebGL, same race issue
 
-From [WebGPU Troubleshooting](https://developer.chrome.com/docs/web-platform/webgpu/troubleshooting-tips):
-
-| Scenario | Result |
-|----------|--------|
-| 1st GPU crash | Can get new adapter |
-| 2nd crash within 2 min | Page blocked from new adapters |
-| 3rd crash within 2 min | ALL pages blocked |
-| 3-6 crashes in 5 min | GPU process stops entirely |
-
-These limits protect against:
-- Malicious pages exhausting GPU resources
-- Runaway shaders causing system instability
-- Memory leaks from improperly disposed contexts
-
-### WebGL Context Limits
-
-Browsers typically allow 8-16 WebGL contexts per origin. Once exhausted:
-- `getContext("webgl2")` returns `null`
-- Fallback rendering is impossible
-
-## Attempted Fixes (Did Not Work)
-
-### 1. beforeunload Handler
-
-```typescript
-window.addEventListener("beforeunload", () => {
-  this.dispose();
-});
-```
-
-**Why it failed**: The `dispose()` calls via Comlink are async (Promises). The page unloads before the worker can process the cleanup.
-
-### 2. Synchronous postMessage Cleanup
-
-Tried sending `{ type: "cleanup" }` directly to workers via `postMessage` to bypass Comlink's async handling.
-
-**Why it failed**: Even with direct postMessage, the cleanup doesn't complete before the page unloads. The GPU context remains orphaned.
-
-### 3. forceContextLoss for WebGL
-
-```typescript
-const ext = gl.getExtension("WEBGL_lose_context");
-ext?.loseContext();
-```
-
-**Why it failed**: This only helps if the cleanup code actually executes before unload, which it doesn't due to the async nature of worker communication.
-
-## If It Happens
+## Workarounds
 
 ### For Users
 
-1. **Wait 2 minutes** - Chrome's limits reset after this period
-2. **Restart browser** - Clears all GPU state
-3. **Check other tabs** - Other WebGL/WebGPU apps may be consuming contexts
+1. **Wait 2 minutes** - Chrome's block resets after 2 min
+2. **Restart browser** - Clears all GPU limits
+3. **Check chrome://gpu** - Verify WebGPU availability
 
-### For Developers
+### For Development
 
-Use Chrome flags to disable limits during development:
-
+Launch Chrome with flags to disable limits:
 ```bash
 chrome --disable-domain-blocking-for-3d-apis --disable-gpu-process-crash-limit
 ```
 
-**Warning**: Only use these flags for development, never in production.
+Or via `chrome://flags`:
+- Enable `#enable-unsafe-webgpu`
 
-## Device Loss Causes
+## Related Issues
 
-GPU device loss can happen for several reasons:
+### Chromium
 
-| Cause | Description |
-|-------|-------------|
-| Driver crash | GPU driver encountered an error |
-| Resource pressure | Out of GPU memory |
-| Long-running shader | Chrome's watchdog kills shaders >10 seconds |
-| Driver update | GPU configuration changed |
-| System sleep/resume | GPU state was reset |
-| Explicit destroy | `device.destroy()` was called |
+- [Issue 1224835](https://bugs.chromium.org/p/chromium/issues/detail?id=1224835) - WebGPU memory leak
+- [Issue 811220](https://bugs.chromium.org/p/chromium/issues/detail?id=811220) - WebGL memory leak on refresh
+- [Issue 248002](https://bugs.chromium.org/p/chromium/issues/detail?id=248002) - GPU memory not freed on reload
 
-## Future Investigation
+### Three.js
 
-To resolve this issue, we need to:
+- [PR #30647](https://github.com/mrdoob/three.js/pull/30647) - WebGPURenderer dispose fixes
+- [Issue #3776](https://github.com/mrdoob/three.js/issues/3776) - GPU memory leak on refresh
 
-1. **Bisect commits** to find when the issue was introduced
-2. **Check for GPU resource leaks** in recent changes
-3. **Review Three.js WebGPURenderer changes** if the issue correlates with a Three.js update
-4. **Consider alternative architectures** that don't use OffscreenCanvas transfer
+## Potential Solutions
+
+### 1. WebGL Fallback
+
+If WebGPU fails, fall back to WebGL:
+
+```typescript
+const renderer = new THREE.WebGPURenderer({ 
+  antialias: true, 
+  forceWebGL: true 
+});
+```
+
+### 2. Device Recovery
+
+Retry adapter request with delay:
+
+```typescript
+async function getAdapter() {
+  let adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    await new Promise(r => setTimeout(r, 100));
+    adapter = await navigator.gpu.requestAdapter();
+  }
+  return adapter;
+}
+```
+
+### 3. File a Chromium Bug
+
+Report: "WebGPU device not released when OffscreenCanvas worker is terminated on page unload"
+
+## Conclusion
+
+This issue exists at the intersection of:
+- WebGPU (newer, less mature than WebGL)
+- OffscreenCanvas in Web Workers
+- Page unload timing
+- Chrome's GPU process crash protection
+
+Until Chrome/Dawn improves WebGPU device cleanup during worker termination, this remains a browser limitation.
 
 ## References
 
-- [WebGPU Troubleshooting (Chrome)](https://developer.chrome.com/docs/web-platform/webgpu/troubleshooting-tips)
+- [Chrome WebGPU Troubleshooting](https://developer.chrome.com/docs/web-platform/webgpu/troubleshooting-tips)
 - [WebGPU Device Loss Best Practices](https://toji.dev/webgpu-best-practices/device-loss.html)
-- [Three.js Context Release Issue](https://github.com/mrdoob/three.js/issues/27100)
-- [OffscreenCanvas Transfer Limitations](https://github.com/whatwg/html/issues/6615)
-- [GPUDeviceLostInfo (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/GPUDeviceLostInfo)
-- [WEBGL_lose_context (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/WEBGL_lose_context)
+- [MDN GPUDevice.destroy()](https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/destroy)
+- [MDN beforeunload event](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event)

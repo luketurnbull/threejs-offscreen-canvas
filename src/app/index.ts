@@ -200,6 +200,12 @@ export default class App {
     this.resizeObserver = new ResizeObserver(this.handleResize.bind(this));
     this.resizeObserver.observe(this.canvas.element);
 
+    // Critical: Clean up GPU resources on page unload to prevent context exhaustion
+    // WebGPU has strict limits on adapter/device allocation - must release before refresh
+    window.addEventListener("beforeunload", () => {
+      this.dispose();
+    });
+
     // Also listen for devicePixelRatio changes
     this.setupPixelRatioListener();
 

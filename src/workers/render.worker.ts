@@ -268,4 +268,13 @@ function createRenderApi(): RenderApi {
   };
 }
 
-Comlink.expose(createRenderApi());
+const api = createRenderApi();
+Comlink.expose(api);
+
+// Listen for direct cleanup messages (bypasses Comlink for synchronous cleanup)
+// This is critical for beforeunload where async Comlink calls won't complete
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "cleanup") {
+    api.dispose();
+  }
+});

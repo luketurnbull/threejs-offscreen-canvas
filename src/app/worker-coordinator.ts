@@ -148,8 +148,17 @@ export default class WorkerCoordinator {
 
   /**
    * Dispose of all workers and resources
+   *
+   * Uses direct postMessage for cleanup instead of Comlink because
+   * Comlink calls are async and won't complete during beforeunload.
+   * The direct message triggers synchronous GPU device destruction.
    */
   dispose(): void {
+    // Send direct cleanup message to render worker (bypasses async Comlink)
+    // This ensures GPU device.destroy() is called synchronously before page unloads
+    this.renderWorker?.postMessage({ type: "cleanup" });
+
+    // Comlink dispose calls (may not complete during beforeunload, but good for normal cleanup)
     this.physicsApi?.dispose();
     this.renderApi?.dispose();
 

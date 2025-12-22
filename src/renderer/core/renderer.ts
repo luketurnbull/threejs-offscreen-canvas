@@ -67,6 +67,16 @@ class Renderer {
   async init(): Promise<void> {
     await this.instance.init();
 
+    // Monitor for GPU device loss (defensive)
+    const device = (
+      this.instance as unknown as { backend?: { device?: GPUDevice } }
+    ).backend?.device;
+    if (device?.lost) {
+      device.lost.then((info: GPUDeviceLostInfo) => {
+        console.warn("[Renderer] GPU device lost:", info.reason, info.message);
+      });
+    }
+
     // Setup debug controls after init
     if (this.debug) {
       this.addDebug(this.debug);
@@ -116,6 +126,23 @@ class Renderer {
 
   dispose(): void {
     this.debugFolder?.dispose();
+
+    // Explicitly destroy WebGPU device to release GPU resources immediately
+    // This is critical for preventing context exhaustion on page refresh
+    // device.destroy() is synchronous and completes before page unloads
+    const backend = this.instance as unknown as {
+      backend?: { device?: GPUDevice; gl?: WebGL2RenderingContext };
+    };
+    if (backend.backend?.device) {
+      backend.backend.device.destroy();
+    }
+
+    // Also handle WebGL fallback case
+    if (backend.backend?.gl) {
+      const ext = backend.backend.gl.getExtension("WEBGL_lose_context");
+      ext?.loseContext();
+    }
+
     this.instance.dispose();
   }
 }
