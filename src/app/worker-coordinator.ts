@@ -5,6 +5,8 @@ import {
   isSharedArrayBufferSupported,
 } from "~/shared/buffers/transform-buffer";
 import { config } from "~/shared/config";
+import LoadProgressTracker from "./load-progress-tracker";
+import AudioBridge from "./audio-bridge";
 
 export interface WorkerCallbacks {
   onProgress?: (progress: number) => void;
@@ -13,10 +15,12 @@ export interface WorkerCallbacks {
 }
 
 /**
- * WorkerCoordinator - Manages worker lifecycle
+ * WorkerCoordinator - Manages worker lifecycle and loading coordination
  *
- * Single responsibility: Create, initialize, and dispose of workers.
- * Does NOT handle entity spawning, input routing, or audio.
+ * Responsibilities:
+ * - Create, initialize, and dispose of workers
+ * - Coordinate loading progress from audio, physics, and render
+ * - Own AudioBridge (bridges main thread audio to worker events)
  */
 export default class WorkerCoordinator {
   private renderWorker: Worker | null = null;
@@ -24,9 +28,14 @@ export default class WorkerCoordinator {
   private renderApi: Comlink.Remote<RenderApi> | null = null;
   private physicsApi: Comlink.Remote<PhysicsApi> | null = null;
   private sharedBuffer: SharedTransformBuffer | null = null;
+  private audioBridge: AudioBridge;
+
+  constructor() {
+    this.audioBridge = new AudioBridge();
+  }
 
   /**
-   * Initialize both workers with shared buffers
+   * Initialize audio, physics, and render workers with coordinated progress tracking
    */
   async init(
     canvas: OffscreenCanvas,
@@ -46,10 +55,29 @@ export default class WorkerCoordinator {
     this.sharedBuffer = new SharedTransformBuffer();
     const buffers = this.sharedBuffer.getBuffers();
 
-    // Initialize render worker and physics worker in parallel
+    // Set up progress tracking with weighted sources
+    const progressTracker = new LoadProgressTracker((progress) => {
+      callbacks.onProgress?.(progress);
+    });
+    progressTracker.addSource("audio", 1);
+    progressTracker.addSource("physics", 1);
+    progressTracker.addSource("render", 4);
+
+    // Initialize audio, physics, and render in parallel
     await Promise.all([
-      this.initRenderWorker(canvas, viewport, debug, callbacks, buffers),
-      this.initPhysicsWorker(buffers),
+      this.audioBridge.init(progressTracker.createCallback("audio")),
+      this.initPhysicsWorker(
+        buffers,
+        progressTracker.createCallback("physics"),
+      ),
+      this.initRenderWorker(
+        canvas,
+        viewport,
+        debug,
+        callbacks,
+        buffers,
+        progressTracker.createCallback("render"),
+      ),
     ]);
   }
 
@@ -63,6 +91,7 @@ export default class WorkerCoordinator {
       transform: SharedArrayBuffer;
       timing: SharedArrayBuffer;
     },
+    onProgress: (progress: number) => void,
   ): Promise<void> {
     this.renderWorker = new Worker(
       new URL("../workers/render.worker.ts", import.meta.url),
@@ -76,7 +105,7 @@ export default class WorkerCoordinator {
       viewport,
       debug,
       sharedBuffers,
-      callbacks.onProgress ? Comlink.proxy(callbacks.onProgress) : undefined,
+      Comlink.proxy(onProgress),
       callbacks.onReady ? Comlink.proxy(callbacks.onReady) : undefined,
       callbacks.onFrameTiming
         ? Comlink.proxy(callbacks.onFrameTiming)
@@ -84,11 +113,14 @@ export default class WorkerCoordinator {
     );
   }
 
-  private async initPhysicsWorker(sharedBuffers: {
-    control: SharedArrayBuffer;
-    transform: SharedArrayBuffer;
-    timing: SharedArrayBuffer;
-  }): Promise<void> {
+  private async initPhysicsWorker(
+    sharedBuffers: {
+      control: SharedArrayBuffer;
+      transform: SharedArrayBuffer;
+      timing: SharedArrayBuffer;
+    },
+    onProgress: (progress: number) => void,
+  ): Promise<void> {
     this.physicsWorker = new Worker(
       new URL("../workers/physics.worker.ts", import.meta.url),
       { type: "module" },
@@ -96,7 +128,11 @@ export default class WorkerCoordinator {
 
     this.physicsApi = Comlink.wrap<PhysicsApi>(this.physicsWorker);
 
-    await this.physicsApi.init(config.physics.gravity, sharedBuffers);
+    await this.physicsApi.init(
+      config.physics.gravity,
+      sharedBuffers,
+      Comlink.proxy(onProgress),
+    );
   }
 
   /**
@@ -127,6 +163,13 @@ export default class WorkerCoordinator {
       throw new Error("WorkerCoordinator not initialized");
     }
     return this.sharedBuffer;
+  }
+
+  /**
+   * Get the audio bridge for setting up callbacks and unlocking audio
+   */
+  getAudioBridge(): AudioBridge {
+    return this.audioBridge;
   }
 
   /**
@@ -164,6 +207,9 @@ export default class WorkerCoordinator {
 
     this.physicsWorker?.terminate();
     this.renderWorker?.terminate();
+
+    // Dispose audio bridge
+    this.audioBridge.dispose();
 
     this.physicsWorker = null;
     this.renderWorker = null;

@@ -117,10 +117,12 @@ export interface BatchBodyConfig {
 export interface PhysicsApi {
   /**
    * Initialize the physics world with shared buffers for transform sync
+   * @param onProgress Optional callback for WASM loading progress (0-1)
    */
   init(
     gravity: { x: number; y: number; z: number },
     sharedBuffers: SharedBuffers,
+    onProgress?: (progress: number) => void,
   ): Promise<void>;
 
   /**

@@ -49,6 +49,7 @@ function createPhysicsApi(): PhysicsApi {
     async init(
       gravity: { x: number; y: number; z: number },
       sharedBuffers: SharedBuffers,
+      onProgress?: (progress: number) => void,
     ): Promise<void> {
       // Warn if already initialized
       if (physicsWorld) {
@@ -65,7 +66,7 @@ function createPhysicsApi(): PhysicsApi {
       );
 
       physicsWorld = new PhysicsWorld();
-      await physicsWorld.init(gravity, sharedBuffer);
+      await physicsWorld.init(gravity, sharedBuffer, onProgress);
     },
 
     async spawnEntity(

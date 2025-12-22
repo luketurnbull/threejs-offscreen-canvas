@@ -5,7 +5,6 @@ import DebugManager from "./debug-manager";
 import WorkerCoordinator from "./worker-coordinator";
 import EntityCoordinator from "./entities";
 import InputRouter from "./input-router";
-import AudioBridge from "./audio-bridge";
 import SpawnController from "./spawn-controller";
 import { ErrorOverlay } from "./components/error-overlay";
 import { LoadingScreen } from "./components/loading-screen";
@@ -29,7 +28,6 @@ export default class App {
   private coordinator: WorkerCoordinator;
   private entities: EntityCoordinator | null = null;
   private inputRouter: InputRouter | null = null;
-  private audioBridge: AudioBridge;
   private spawnController: SpawnController | null = null;
 
   // UI components
@@ -66,7 +64,6 @@ export default class App {
     this.input = new InputManager(canvasElement);
     this.debug = new DebugManager();
     this.coordinator = new WorkerCoordinator();
-    this.audioBridge = new AudioBridge();
 
     // Show loading screen
     this.showLoadingScreen();
@@ -80,7 +77,7 @@ export default class App {
 
     // Set up start button callback to unlock audio
     this.loadingScreen.setOnStart(() => {
-      this.audioBridge.unlockAudio();
+      this.coordinator.getAudioBridge().unlockAudio();
     });
 
     document.body.appendChild(this.loadingScreen);
@@ -103,38 +100,19 @@ export default class App {
     const offscreen = this.canvas.transferToOffscreen();
     const viewport = this.canvas.getViewport();
 
-    // Progress tracking - audio is 20%, render assets are 80%
-    const AUDIO_WEIGHT = 0.2;
-    const RENDER_WEIGHT = 0.8;
-    let audioProgress = 0;
-    let renderProgress = 0;
-
-    const updateCombinedProgress = (): void => {
-      const combined =
-        audioProgress * AUDIO_WEIGHT + renderProgress * RENDER_WEIGHT;
-      this.handleLoadProgress(combined);
-    };
-
-    // Initialize audio and workers in parallel
-    await Promise.all([
-      this.audioBridge.init((progress: number) => {
-        audioProgress = progress;
-        updateCombinedProgress();
-      }),
-      this.coordinator.init(offscreen, viewport, this.debug.active, {
-        onProgress: (progress: number) => {
-          renderProgress = progress;
-          updateCombinedProgress();
-        },
-        onReady: () => {
-          // Resources loaded, show start button
-          this.loadingScreen?.showStartButton();
-        },
-        onFrameTiming: (deltaMs: number) => {
-          this.debug.updateFrameTiming(deltaMs);
-        },
-      }),
-    ]);
+    // Initialize coordinator (handles audio, physics, and render workers with progress tracking)
+    await this.coordinator.init(offscreen, viewport, this.debug.active, {
+      onProgress: (progress: number) => {
+        this.handleLoadProgress(progress);
+      },
+      onReady: () => {
+        // Resources loaded, show start button
+        this.loadingScreen?.showStartButton();
+      },
+      onFrameTiming: (deltaMs: number) => {
+        this.debug.updateFrameTiming(deltaMs);
+      },
+    });
 
     // Get worker APIs
     const physicsApi = this.coordinator.getPhysicsApi();
@@ -155,7 +133,7 @@ export default class App {
     );
 
     // Wire up audio callbacks
-    this.audioBridge.setupCallbacks(physicsApi, renderApi);
+    this.coordinator.getAudioBridge().setupCallbacks(physicsApi, renderApi);
 
     // Initialize world (ground, player, test objects)
     await this.entities.initWorld();
@@ -331,7 +309,6 @@ export default class App {
     this.spawnController?.dispose();
     this.inputRouter?.dispose();
     this.entities?.dispose();
-    this.audioBridge.dispose();
     this.coordinator.dispose();
 
     this.spawnController = null;

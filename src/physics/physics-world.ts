@@ -54,11 +54,14 @@ export default class PhysicsWorld {
   async init(
     gravity: { x: number; y: number; z: number },
     sharedBuffer: SharedTransformBuffer,
+    onProgress?: (progress: number) => void,
   ): Promise<void> {
     this.sharedBuffer = sharedBuffer;
 
     // Initialize Rapier WASM
+    onProgress?.(0);
     await RAPIER.init();
+    onProgress?.(1);
 
     // Create physics world
     this.world = new RAPIER.World(gravity);
