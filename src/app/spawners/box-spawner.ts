@@ -39,8 +39,9 @@ export default class BoxSpawner {
     // Register in shared buffer
     this.sharedBuffer.registerEntity(entityId);
 
-    // Create physics body
+    // Create physics body with actual dimensions
     const positions = new Float32Array([position.x, position.y, position.z]);
+    const sizes = new Float32Array([size.x, size.y, size.z]);
     const velocities = velocity
       ? new Float32Array([velocity.x, velocity.y, velocity.z])
       : undefined;
@@ -48,10 +49,8 @@ export default class BoxSpawner {
     await this.physicsApi.spawnBodies(
       [entityId],
       positions,
-      {
-        type: "box",
-        size: Math.max(size.x, size.y, size.z), // Use largest dimension for physics
-      },
+      { type: "box" },
+      sizes,
       velocities,
     );
 
@@ -71,6 +70,7 @@ export default class BoxSpawner {
     const entityIds: EntityId[] = [];
     const scales: Array<{ x: number; y: number; z: number }> = [];
     const positions = new Float32Array(commands.length * 3);
+    const sizes = new Float32Array(commands.length * 3);
 
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
@@ -84,16 +84,23 @@ export default class BoxSpawner {
       positions[i * 3 + 1] = command.position.y;
       positions[i * 3 + 2] = command.position.z;
 
+      // Per-entity sizes for physics (3 floats per box)
+      sizes[i * 3] = size.x;
+      sizes[i * 3 + 1] = size.y;
+      sizes[i * 3 + 2] = size.z;
+
       // Register in shared buffer
       this.sharedBuffer.registerEntity(entityId);
       this.entityIds.add(entityId);
     }
 
-    // Batch physics spawn
-    await this.physicsApi.spawnBodies(entityIds, positions, {
-      type: "box",
-      size: 1, // Default size, actual scale handled by render
-    });
+    // Batch physics spawn with actual per-entity sizes
+    await this.physicsApi.spawnBodies(
+      entityIds,
+      positions,
+      { type: "box" },
+      sizes,
+    );
 
     // Batch render spawn
     await this.renderApi.addBoxes(entityIds, scales);

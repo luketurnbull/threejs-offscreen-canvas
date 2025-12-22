@@ -6,6 +6,7 @@ import type {
   MovementInput,
   PlayerStateCallback,
 } from "~/shared/types";
+import type { DebugPlayerUpdate } from "~/shared/debug-config";
 import { config } from "~/shared/config";
 
 /**
@@ -112,6 +113,30 @@ export default class FloatingCapsuleController {
    */
   setPlayerStateCallback(callback: PlayerStateCallback): void {
     this.playerStateCallback = callback;
+  }
+
+  /**
+   * Update controller config from debug UI
+   */
+  updateConfig(update: DebugPlayerUpdate): void {
+    if (update.springStrength !== undefined) {
+      this.config.springStrength = update.springStrength;
+    }
+    if (update.springDamping !== undefined) {
+      this.config.springDamping = update.springDamping;
+    }
+    if (update.moveForce !== undefined) {
+      this.config.moveForce = update.moveForce;
+    }
+    if (update.jumpForce !== undefined) {
+      this.config.jumpForce = update.jumpForce;
+    }
+    if (update.floatingDistance !== undefined) {
+      this.config.floatingDistance = update.floatingDistance;
+    }
+    if (update.maxVelocity !== undefined) {
+      this.config.maxVelocity = update.maxVelocity;
+    }
   }
 
   /**

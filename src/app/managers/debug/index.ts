@@ -1,8 +1,11 @@
 import type { DebugBinding, DebugUpdateEvent } from "~/shared/types";
 import StatsManager from "./stats-manager";
-import TweakpaneManager, { type MainThreadActions } from "./tweakpane-manager";
+import TweakpaneManager, {
+  type MainThreadActions,
+  type PhysicsDebugCallbacks,
+} from "./tweakpane-manager";
 
-export type { MainThreadActions };
+export type { MainThreadActions, PhysicsDebugCallbacks };
 
 /**
  * DebugManager - Facade for debug UI (Tweakpane + Stats.js)
@@ -23,6 +26,10 @@ export default class DebugManager {
 
   setMainThreadActions(actions: MainThreadActions): void {
     this.tweakpane?.setMainThreadActions(actions);
+  }
+
+  setPhysicsCallbacks(callbacks: PhysicsDebugCallbacks): void {
+    this.tweakpane?.setPhysicsCallbacks(callbacks);
   }
 
   setUpdateCallback(callback: (event: DebugUpdateEvent) => void): void {

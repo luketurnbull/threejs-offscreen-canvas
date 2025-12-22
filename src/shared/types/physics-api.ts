@@ -1,5 +1,6 @@
 import type { EntityId, EntitySpawnData, Transform } from "./entity";
 import type { CollisionCallback, PlayerStateCallback } from "./audio-events";
+import type { DebugPhysicsUpdate, DebugPlayerUpdate } from "../debug-config";
 
 // ============================================
 // Physics Worker API - exposed via Comlink
@@ -104,11 +105,10 @@ export interface SharedBuffers {
 
 /**
  * Batch body spawn configuration
+ * Per-entity sizes are passed separately via Float32Array
  */
 export interface BatchBodyConfig {
   type: "box" | "sphere";
-  size?: number; // For boxes (uniform scale)
-  radius?: number; // For spheres
 }
 
 /**
@@ -155,12 +155,14 @@ export interface PhysicsApi {
    * Spawn multiple physics bodies at once
    * Supports both boxes and spheres
    * Entity IDs must already be registered in the shared buffer
+   * @param sizes Per-entity sizes: boxes = 3 floats (x,y,z), spheres = 1 float (radius)
    * @param velocities Optional initial velocities (3 floats per entity: vx, vy, vz)
    */
   spawnBodies(
     entityIds: EntityId[],
     positions: Float32Array,
     config: BatchBodyConfig,
+    sizes: Float32Array,
     velocities?: Float32Array,
   ): Promise<void>;
 
@@ -218,4 +220,20 @@ export interface PhysicsApi {
    * Called when player jumps or lands
    */
   setPlayerStateCallback(callback: PlayerStateCallback): void;
+
+  // ============================================
+  // Debug Configuration (runtime tweaking)
+  // ============================================
+
+  /**
+   * Update physics world config (density, gravity)
+   * Applied to newly spawned bodies
+   */
+  updatePhysicsConfig(config: DebugPhysicsUpdate): void;
+
+  /**
+   * Update player controller config
+   * Applied immediately to movement
+   */
+  updatePlayerConfig(config: DebugPlayerUpdate): void;
 }

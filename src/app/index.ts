@@ -100,6 +100,8 @@ export default class App {
   private async setupDebug(
     renderApi: Awaited<ReturnType<WorkerCoordinator["getRenderApi"]>>,
   ): Promise<void> {
+    const physicsApi = this.coordinator.getPhysicsApi();
+
     this.debug.setUpdateCallback((event) => renderApi.updateDebug(event));
     this.debug.setActionCallback((id) => renderApi.triggerDebugAction(id));
 
@@ -112,6 +114,12 @@ export default class App {
       getCubeCount: () => this.entities?.getTotalCount() ?? 0,
       getBoxCount: () => this.entities?.getBoxCount() ?? 0,
       getSphereCount: () => this.entities?.getSphereCount() ?? 0,
+    });
+
+    this.debug.setPhysicsCallbacks({
+      onDensityChange: (density) => physicsApi.updatePhysicsConfig({ density }),
+      onGravityChange: (gravity) => physicsApi.updatePhysicsConfig({ gravity }),
+      onPlayerConfigChange: (config) => physicsApi.updatePlayerConfig(config),
     });
 
     const bindings = await renderApi.getDebugBindings();

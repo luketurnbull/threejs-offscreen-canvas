@@ -9,6 +9,10 @@ import type {
   PlayerStateCallback,
   BatchBodyConfig,
 } from "~/shared/types";
+import type {
+  DebugPhysicsUpdate,
+  DebugPlayerUpdate,
+} from "~/shared/debug-config";
 import type { SharedTransformBuffer } from "~/shared/buffers";
 import { config } from "~/shared/config";
 import { generateTerrainHeights } from "~/shared/utils";
@@ -50,6 +54,12 @@ export default class PhysicsWorld {
 
   // Per-frame collision limit to prevent audio overload
   private readonly MAX_COLLISIONS_PER_FRAME = 12;
+
+  // Mutable physics config (can be changed via debug UI)
+  private mutableConfig: { density: number; gravity: number } = {
+    density: config.physics.density,
+    gravity: config.physics.gravity.y,
+  };
 
   async init(
     gravity: { x: number; y: number; z: number },
@@ -245,12 +255,14 @@ export default class PhysicsWorld {
   /**
    * Spawn multiple physics bodies at once (boxes or spheres)
    * Entity IDs must already be registered in the shared buffer
+   * @param sizes Per-entity sizes: boxes = 3 floats (x,y,z), spheres = 1 float (radius)
    * @param velocities Optional initial velocities (3 floats per entity: vx, vy, vz)
    */
   spawnBodies(
     entityIds: EntityId[],
     positions: Float32Array,
     bodyConfig: BatchBodyConfig,
+    sizes: Float32Array,
     velocities?: Float32Array,
   ): void {
     const { world, sharedBuffer } = this.ensureInitialized();
@@ -259,6 +271,7 @@ export default class PhysicsWorld {
     sharedBuffer.rebuildEntityMap();
 
     const count = entityIds.length;
+    const density = this.mutableConfig.density;
 
     for (let i = 0; i < count; i++) {
       const id = entityIds[i];
@@ -286,20 +299,23 @@ export default class PhysicsWorld {
         body.setLinvel({ x: vx, y: vy, z: vz }, true);
       }
 
-      // Create collider based on type
+      // Create collider based on type with per-entity sizes
       let colliderDesc: RAPIER.ColliderDesc;
 
       if (bodyConfig.type === "sphere") {
-        const radius = bodyConfig.radius ?? 0.5;
+        // Spheres: 1 float per entity (radius)
+        const radius = sizes[i];
         colliderDesc = RAPIER.ColliderDesc.ball(radius)
-          .setMass(1)
+          .setDensity(density)
           .setFriction(0.3)
           .setRestitution(0.6);
       } else {
-        // Default to box
-        const halfSize = (bodyConfig.size ?? 1) / 2;
-        colliderDesc = RAPIER.ColliderDesc.cuboid(halfSize, halfSize, halfSize)
-          .setMass(1)
+        // Boxes: 3 floats per entity (x, y, z dimensions)
+        const hx = sizes[i * 3] / 2;
+        const hy = sizes[i * 3 + 1] / 2;
+        const hz = sizes[i * 3 + 2] / 2;
+        colliderDesc = RAPIER.ColliderDesc.cuboid(hx, hy, hz)
+          .setDensity(density)
           .setFriction(0.5)
           .setRestitution(0.3);
       }
@@ -347,6 +363,29 @@ export default class PhysicsWorld {
 
   setPlayerInput(input: MovementInput): void {
     this.floatingController?.setInput(input);
+  }
+
+  /**
+   * Update physics config (density, gravity) from debug UI
+   */
+  updatePhysicsConfig(update: DebugPhysicsUpdate): void {
+    if (update.density !== undefined) {
+      this.mutableConfig.density = update.density;
+    }
+    if (update.gravity !== undefined) {
+      this.mutableConfig.gravity = update.gravity;
+      // Apply gravity change to world immediately
+      if (this.world) {
+        this.world.gravity = { x: 0, y: update.gravity, z: 0 };
+      }
+    }
+  }
+
+  /**
+   * Update player controller config from debug UI
+   */
+  updatePlayerConfig(update: DebugPlayerUpdate): void {
+    this.floatingController?.updateConfig(update);
   }
 
   /**

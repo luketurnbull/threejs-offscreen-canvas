@@ -39,8 +39,9 @@ export default class SphereSpawner {
     // Register in shared buffer
     this.sharedBuffer.registerEntity(entityId);
 
-    // Create physics body
+    // Create physics body with actual radius
     const positions = new Float32Array([position.x, position.y, position.z]);
+    const sizes = new Float32Array([radius]);
     const velocities = velocity
       ? new Float32Array([velocity.x, velocity.y, velocity.z])
       : undefined;
@@ -48,10 +49,8 @@ export default class SphereSpawner {
     await this.physicsApi.spawnBodies(
       [entityId],
       positions,
-      {
-        type: "sphere",
-        radius,
-      },
+      { type: "sphere" },
+      sizes,
       velocities,
     );
 
@@ -71,6 +70,7 @@ export default class SphereSpawner {
     const entityIds: EntityId[] = [];
     const radii: number[] = [];
     const positions = new Float32Array(commands.length * 3);
+    const sizes = new Float32Array(commands.length);
 
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
@@ -84,19 +84,21 @@ export default class SphereSpawner {
       positions[i * 3 + 1] = command.position.y;
       positions[i * 3 + 2] = command.position.z;
 
+      // Per-entity radius for physics (1 float per sphere)
+      sizes[i] = radius;
+
       // Register in shared buffer
       this.sharedBuffer.registerEntity(entityId);
       this.entityIds.add(entityId);
     }
 
-    // Batch physics spawn - use average radius for physics
-    const avgRadius =
-      radii.reduce((a, b) => a + b, 0) / radii.length ||
-      DEFAULT_SIZES.sphereRadius;
-    await this.physicsApi.spawnBodies(entityIds, positions, {
-      type: "sphere",
-      radius: avgRadius,
-    });
+    // Batch physics spawn with actual per-entity radii
+    await this.physicsApi.spawnBodies(
+      entityIds,
+      positions,
+      { type: "sphere" },
+      sizes,
+    );
 
     // Batch render spawn
     await this.renderApi.addSpheres(entityIds, radii);

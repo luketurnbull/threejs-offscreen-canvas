@@ -20,6 +20,10 @@ import type {
   PlayerStateCallback,
   BatchBodyConfig,
 } from "~/shared/types";
+import type {
+  DebugPhysicsUpdate,
+  DebugPlayerUpdate,
+} from "~/shared/debug-config";
 import { assertInitialized, assertValidEntityId } from "~/shared/validation";
 import { PhysicsWorld } from "../physics";
 
@@ -107,6 +111,7 @@ function createPhysicsApi(): PhysicsApi {
       entityIds: EntityId[],
       positions: Float32Array,
       config: BatchBodyConfig,
+      sizes: Float32Array,
       velocities?: Float32Array,
     ): Promise<void> {
       for (const id of entityIds) {
@@ -116,6 +121,7 @@ function createPhysicsApi(): PhysicsApi {
         entityIds,
         positions,
         config,
+        sizes,
         velocities,
       );
     },
@@ -166,6 +172,18 @@ function createPhysicsApi(): PhysicsApi {
 
     setPlayerStateCallback(callback: PlayerStateCallback): void {
       assertPhysicsInitialized().setPlayerStateCallback(callback);
+    },
+
+    // ============================================
+    // Debug Configuration
+    // ============================================
+
+    updatePhysicsConfig(config: DebugPhysicsUpdate): void {
+      assertPhysicsInitialized().updatePhysicsConfig(config);
+    },
+
+    updatePlayerConfig(config: DebugPlayerUpdate): void {
+      assertPhysicsInitialized().updatePlayerConfig(config);
     },
   };
 }

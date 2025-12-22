@@ -63,6 +63,7 @@ export const config = {
   physics: {
     gravity: { x: 0, y: -20, z: 0 },
     interval: 1000 / 60, // 16.667ms for 60Hz
+    density: 1.0, // Default density for spawned bodies (mass = density × volume)
   },
 
   // Player movement
