@@ -12,7 +12,9 @@ export default class InstancedSpheres extends InstancedMeshBase {
   }
 
   protected createGeometry(): THREE.BufferGeometry {
-    return new THREE.SphereGeometry(0.5, 16, 12);
+    // Reduced from (16,12) to (12,8) for performance
+    // 96 verts vs 192 - imperceptible at distance
+    return new THREE.SphereGeometry(0.5, 12, 8);
   }
 
   protected createMaterial(): THREE.Material {

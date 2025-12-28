@@ -1,20 +1,20 @@
-# Three.js WebGPU Multi-Worker Starter
+# Three.js Multi-Worker Starter
 
-A high-performance Three.js boilerplate featuring WebGPU rendering and Rapier physics, each running in dedicated Web Workers. Achieves smooth 120Hz+ visuals from 60Hz physics through timestamp-based interpolation over SharedArrayBuffer.
+High-performance Three.js + Rapier physics in dedicated Web Workers. Smooth 120Hz+ visuals from 60Hz physics via timestamp interpolation over SharedArrayBuffer.
 
 ## Features
 
-- **WebGPU Rendering** - Modern GPU API via Three.js WebGPURenderer (WebGL2 fallback available)
-- **OffscreenCanvas** - Rendering runs entirely in a Web Worker, freeing the main thread
-- **Rapier Physics** - 3D rigid body simulation in a dedicated worker at fixed 60Hz
-- **SharedArrayBuffer** - Zero-copy transform synchronization between workers
-- **Timestamp Interpolation** - Smooth motion at any display refresh rate
-- **Floating Capsule Controller** - Spring-damper based character movement with coyote time
+- **WebGL Rendering** - Three.js WebGLRenderer in OffscreenCanvas worker
+- **Rapier Physics** - 3D rigid body simulation in dedicated worker at 60Hz
+- **SharedArrayBuffer** - Zero-copy transform sync between workers
+- **Timestamp Interpolation** - Smooth motion at any refresh rate
+- **Floating Capsule Controller** - Spring-damper character with coyote time
 - **Procedural Terrain** - Deterministic heightfield with Simplex noise
-- **GPU Instancing** - Stress test with 1000+ physics cubes in a single draw call
-- **Entity System** - Factory + registry pattern for extensible entity types
-- **TypeScript** - Full type safety with branded types for EntityIds
-- **Debug Tools** - Tweakpane UI, Stats.js, physics collider visualization
+- **GPU Instancing** - 1000+ physics objects in single draw call
+- **Spatial Audio** - 3D positional audio with footsteps, collisions, jump/land
+- **Entity System** - Factory + registry pattern
+- **TypeScript** - Full type safety with branded EntityIds
+- **Debug Tools** - Tweakpane, Stats.js, physics collider visualization
 
 ## Quick Start
 
@@ -23,200 +23,155 @@ bun install
 bun run dev
 ```
 
-Open `http://localhost:5173` - use WASD to move, Space to jump, Shift to sprint.
+Open `http://localhost:5173` - WASD to move, Space to jump, Shift to sprint.
 
-Add `#debug` to the URL for debug controls and performance stats.
+Add `#debug` for debug controls and performance stats.
 
-## Architecture Overview
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              MAIN THREAD                                     │
-│                                                                              │
-│   ┌─────────┐    ┌─────────────┐    ┌─────────────┐    ┌───────────────┐    │
-│   │   App   │───>│WorkerBridge │───>│InputManager │    │ DebugManager  │    │
-│   └─────────┘    └──────┬──────┘    └─────────────┘    └───────────────┘    │
-│                         │                                                    │
-└─────────────────────────┼────────────────────────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          │               │               │
-          ▼               ▼               ▼
-┌─────────────────┐  ┌─────────┐  ┌─────────────────┐
-│  PHYSICS WORKER │  │ Shared  │  │  RENDER WORKER  │
-│                 │  │ Array   │  │                 │
-│   PhysicsWorld  │──│ Buffer  │──│   Experience    │
-│    (Rapier)     │  │         │  │   (Three.js)    │
-│                 │  └─────────┘  │                 │
-│   60Hz fixed    │               │  WebGPURenderer │
-│   setTimeout    │               │  ~120Hz (rAF)   │
-└─────────────────┘               └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         MAIN THREAD                              │
+│  App ─┬─ WorkerCoordinator (worker lifecycle)                   │
+│       ├─ EntityCoordinator                                       │
+│       │   ├─ WorldSpawner, PlayerSpawner                        │
+│       │   └─ BoxSpawner, SphereSpawner                          │
+│       ├─ InputRouter, AudioBridge, AudioManager                 │
+│       ├─ InputManager, DebugManager, UIManager                  │
+│       └─ ResizeHandler, SpawnHandler                            │
+└─────────────────────────────────────────────────────────────────┘
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+┌───────────────┐  ┌─────────┐  ┌───────────────┐
+│PHYSICS WORKER │  │ Shared  │  │ RENDER WORKER │
+│  PhysicsWorld │══│ Buffer  │══│  Experience   │
+│  60Hz fixed   │  └─────────┘  │  ~60Hz (rAF)  │
+└───────────────┘               └───────────────┘
 ```
 
 ### How It Works
 
-1. **Physics Worker** runs Rapier at a fixed 60Hz timestep, writing transforms and timestamps to SharedArrayBuffer
-2. **Render Worker** reads transforms each frame, calculates interpolation alpha from timestamps, and smoothly blends between physics states
-3. **Main Thread** handles input capture, debug UI, and worker orchestration - no heavy computation
+1. **Physics Worker** - Rapier at 60Hz, writes transforms + timestamps to SharedArrayBuffer
+2. **Render Worker** - Reads transforms, interpolates between physics states
+3. **Main Thread** - Input capture, audio, debug UI, worker orchestration
 
 ### Key Technologies
 
 | Technology | Purpose |
 |------------|---------|
-| [Three.js WebGPU](https://threejs.org/docs/#api/en/renderers/WebGPURenderer) | Modern GPU rendering with lower driver overhead |
-| [Rapier](https://rapier.rs/) | Fast 3D physics engine (WASM) |
-| [SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) | Zero-copy memory sharing between workers |
-| [Comlink](https://github.com/GoogleChromeLabs/comlink) | Type-safe RPC for worker communication |
-| [OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) | Canvas rendering in workers |
+| [Three.js](https://threejs.org/) | WebGL rendering |
+| [Rapier](https://rapier.rs/) | 3D physics (WASM) |
+| [SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) | Zero-copy memory sharing |
+| [Comlink](https://github.com/GoogleChromeLabs/comlink) | Type-safe worker RPC |
+| [OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) | Worker canvas rendering |
 
 ## Project Structure
 
 ```
 src/
-  main.ts                       # Entry point, feature detection
+  main.ts                    # Entry point
   
-  app/                          # Main thread orchestration
-    index.ts                    # App class (coordinator)
-    worker-bridge.ts            # Worker lifecycle & entity spawning
-    canvas-manager.ts           # OffscreenCanvas transfer
-    input-manager.ts            # Keyboard event capture
-    debug-manager.ts            # Tweakpane + Stats.js UI
+  app/                       # Main thread
+    index.ts                 # App orchestrator
+    coordinators/
+      worker-coordinator.ts  # Worker lifecycle
+      entity-coordinator.ts  # Entity orchestration
+    managers/
+      audio-manager.ts       # Web Audio API
+      input-manager.ts       # DOM events
+      debug/                 # Tweakpane + Stats.js
+    handlers/
+      resize-handler.ts
+      spawn-handler.ts
+    bridges/
+      audio-bridge.ts        # Audio↔worker wiring
+    routing/
+      input-router.ts        # Input→workers
+    providers/
+      canvas-provider.ts     # OffscreenCanvas
+    spawners/
+      box-spawner.ts, sphere-spawner.ts
+      player-spawner.ts, world-spawner.ts
+    ui/
+      ui-manager.ts          # UI lifecycle
+    components/
+      loading-screen.ts
+      error-overlay.ts
+      entity-spawner-ui.ts
+      keyboard-controls-ui.ts
     
-  renderer/                     # Three.js domain (render worker)
+  renderer/                  # Three.js (worker)
     core/
-      experience.ts             # Orchestrator (Bruno Simon pattern)
-      renderer.ts               # WebGPURenderer wrapper
-      camera.ts                 # Third-person follow camera
+      experience.ts          # Orchestrator
+      renderer.ts            # WebGLRenderer
+      camera.ts              # Follow camera
     world/
-      world.ts                  # Entity + scene object management
-      environment.ts            # Lighting setup
-    entities/                   # Entity component system
-      components/
-        player.ts               # Fox character + animations
-        ground.ts               # Invisible physics proxy
-        dynamic-box.ts          # Physics box entity
-        dynamic-sphere.ts       # Physics sphere entity
-    objects/                    # Visual components
-      fox.ts                    # Animated GLTF model
-      floor.ts                  # Ground plane mesh
-      instanced-cubes.ts        # GPU-instanced cube rendering
+      world.ts               # Entities + scene
+      environment.ts         # Lighting
+    entities/
+      types.ts
+      index.ts               # Factory + Registry
+      components/            # player, ground, static-mesh
+    objects/
+      instanced-mesh-base.ts
+      instanced-boxes.ts
+      instanced-spheres.ts
+      fox.ts, floor.ts
     sync/
-      transform-sync.ts         # Physics interpolation
-      physics-debug-renderer.ts # Collider visualization
-    systems/
-      time.ts                   # requestAnimationFrame loop
-      resources.ts              # Asset loading
-      
-  physics/                      # Rapier domain (physics worker)
-    physics-world.ts            # World + body management
-    floating-capsule-controller.ts  # Player character controller
+      transform-sync.ts      # Interpolation
+      physics-debug-renderer.ts
+    systems/                 # time, resources, debug, input-state
     
-  workers/                      # Thin worker entry points
-    render.worker.ts            # Comlink.expose(renderApi)
-    physics.worker.ts           # Comlink.expose(physicsApi)
+  physics/                   # Rapier (worker)
+    physics-world.ts
+    floating-capsule-controller.ts
     
-  shared/                       # Cross-worker contracts
-    config.ts                   # Centralized configuration
-    types/                      # API interfaces, EntityId
-    buffers/                    # SharedTransformBuffer
-    utils/                      # EventEmitter, noise, terrain
+  workers/                   # Thin entry points
+    render.worker.ts
+    physics.worker.ts
+    
+  shared/                    # Cross-worker
+    config.ts
+    types/, buffers/, utils/
 ```
-
-## Debug Mode
-
-Add `#debug` to the URL to enable:
-
-- **Tweakpane UI** - Adjust renderer, camera, physics settings live
-- **Stats.js** - FPS, frame time, memory usage
-- **Physics Colliders** - Green wireframe visualization
-- **Cube Storm** - Stress test with physics cubes
-
-### Cube Storm Controls
-
-| Button | Action |
-|--------|--------|
-| Drop 100 Cubes | Spawn 100 physics cubes above the terrain |
-| Drop 500 Cubes | Spawn 500 physics cubes (stress test) |
-| Clear All Cubes | Remove all spawned cubes |
 
 ## Configuration
 
-All settings are centralized in `src/shared/config.ts`:
+All settings in `src/shared/config.ts`:
 
 ```typescript
-import { config } from "~/shared/config";
-
-// Renderer
-config.renderer.clearColor        // "#211d20"
-config.renderer.toneMappingExposure // 1.75
-
-// Camera
-config.camera.fov                 // 35
+config.renderer.clearColor        // "#ffffff"
 config.camera.follow.distance     // 10
-config.camera.follow.height       // 5
-
-// Physics
 config.physics.gravity            // { x: 0, y: -20, z: 0 }
-
-// Floating Capsule Controller
-config.floatingCapsule.springStrength  // 1.2
-config.floatingCapsule.jumpForce       // 8
-config.floatingCapsule.coyoteTime      // 150ms
-
-// Terrain
-config.terrain.amplitude          // 2.5
-config.terrain.seed               // 42
+config.floatingCapsule.jumpForce  // 12
+config.terrain.amplitude          // 5
+config.audio.footsteps.volume     // 0.4
+config.spawner.projectileSpeed    // 20
 ```
-
-## Transform Interpolation
-
-The render worker interpolates between physics frames for smooth motion:
-
-```typescript
-// Physics writes transforms at 60Hz with timestamps
-sharedBuffer.writeTransform(index, pos, rot);
-sharedBuffer.writeFrameTiming(now, interval);
-sharedBuffer.signalFrameComplete();
-
-// Render calculates alpha and interpolates
-const timing = sharedBuffer.readFrameTiming();
-const alpha = (now - timing.currentTime) / timing.interval;
-position = lerp(previous, current, alpha);
-rotation = slerp(previous, current, alpha);
-```
-
-This implements Glenn Fiedler's ["Fix Your Timestep!"](https://gafferongames.com/post/fix_your_timestep/) pattern for smooth, jitter-free motion regardless of display refresh rate.
 
 ## Entity System
 
-Entities use a factory + registry pattern for extensibility:
+See [docs/entities.md](docs/entities.md).
 
 ```typescript
-// Register entity types (startup)
+// Register types at startup
 entityRegistry.register("player", createPlayerEntity);
-entityRegistry.register("dynamic-box", createDynamicBoxEntity);
 
 // Create at runtime
 const entity = await entityFactory.create(id, "player", data);
 ```
 
-All entities implement `RenderComponent` with lifecycle hooks:
+Lifecycle hooks: `onTransformUpdate`, `onPhysicsFrame`, `onRenderFrame`, `dispose`.
 
-| Hook | When Called | Use Case |
-|------|-------------|----------|
-| `onTransformUpdate` | After interpolated transform applied | Custom positioning |
-| `onPhysicsFrame` | New physics data arrives (~60Hz) | Input-driven state |
-| `onRenderFrame` | Every render frame | Animations, shaders |
-| `dispose` | Entity removed | Cleanup resources |
+## Debug Mode
 
-## Adding New Workers
+Add `#debug` to URL:
 
-1. **Create domain module**: `src/audio/index.ts`
-2. **Create worker entry**: `src/workers/audio.worker.ts`
-3. **Add API types**: `src/shared/types/audio-api.ts`
-4. **Register in WorkerBridge**
-
-See [docs/architecture.md](docs/architecture.md) for detailed instructions.
+- **Tweakpane UI** - Live settings adjustment
+- **Stats.js** - FPS, frame time, memory
+- **Physics Colliders** - Green wireframe visualization
+- **Entity Spawning** - Click to spawn boxes/spheres
 
 ## Browser Support
 
@@ -224,71 +179,51 @@ See [docs/architecture.md](docs/architecture.md) for detailed instructions.
 - OffscreenCanvas (Chrome 69+, Firefox 105+, Safari 16.4+)
 - SharedArrayBuffer (requires COOP/COEP headers)
 - ES Modules in Workers
-- WebGPU (Chrome 113+, Firefox 127+, Safari 18+) or WebGL2 fallback
+- WebGL2
 
 **No fallback** - shows error overlay if unsupported.
 
 ## Deployment
 
-### Vercel
+### Headers Required
 
-The project includes `vercel.json` with required Cross-Origin Isolation headers:
-
-```json
-{
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
-      ]
-    }
-  ]
-}
-```
-
-### Other Hosts
-
-Ensure your server sends these headers for SharedArrayBuffer support:
+SharedArrayBuffer requires Cross-Origin Isolation:
 
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
+Configured in `vite.config.ts` and `vercel.json`.
+
 ## Known Issues
 
-### First Load Vibration
-
-On first page load (cold cache), there may be brief character vibration. This resolves on page reload and appears to be a worker initialization race condition. The physics and render workers sync correctly after initial setup completes.
-
-### Subtle Movement Vibration
-
-There's ongoing work to eliminate subtle vibration during character movement. The interpolation system works well, but timing jitter from `setTimeout` in the physics worker can cause minor inconsistencies. See [docs/interpolation.md](docs/interpolation.md) for debugging history and potential future fixes.
+- **First load vibration** - Worker init race, resolves on reload
+- **Movement vibration** - `setTimeout` jitter in physics. See [docs/interpolation.md](docs/interpolation.md)
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [architecture.md](docs/architecture.md) | Full system design, patterns, adding workers |
-| [entities.md](docs/entities.md) | Entity component system, adding new types |
-| [physics.md](docs/physics.md) | Floating capsule controller, terrain, colliders |
-| [interpolation.md](docs/interpolation.md) | Transform sync, timing, known issues |
+| Doc | Content |
+|-----|---------|
+| [architecture.md](docs/architecture.md) | System design, adding workers |
+| [entities.md](docs/entities.md) | Entity system |
+| [physics.md](docs/physics.md) | Floating capsule, terrain |
+| [interpolation.md](docs/interpolation.md) | Transform sync |
+| [audio.md](docs/audio.md) | Spatial audio system |
 
 ## Scripts
 
 ```bash
-bun run dev      # Start Vite dev server with HMR
+bun run dev      # Dev server with HMR
 bun run build    # TypeScript check + production build
 bun run preview  # Preview production build
 ```
 
 ## Credits
 
-- Architecture inspired by [Bruno Simon's Three.js Journey](https://threejs-journey.com/)
-- Floating capsule controller inspired by [Toyful Games](https://www.toyfulgames.com/) and [pmndrs/ecctrl](https://github.com/pmndrs/ecctrl)
-- Interpolation based on [Glenn Fiedler's "Fix Your Timestep!"](https://gafferongames.com/post/fix_your_timestep/)
+- [Bruno Simon's Three.js Journey](https://threejs-journey.com/)
+- [Toyful Games](https://www.toyfulgames.com/) / [pmndrs/ecctrl](https://github.com/pmndrs/ecctrl)
+- [Glenn Fiedler's "Fix Your Timestep!"](https://gafferongames.com/post/fix_your_timestep/)
 
 ## License
 

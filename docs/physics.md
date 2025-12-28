@@ -32,16 +32,37 @@ Dynamic rigidbody with spring-damper, not kinematic.
 
 ```typescript
 floatingCapsule: {
+  // Capsule dimensions
   radius: 0.35,
   halfHeight: 0.25,
+
+  // Floating spring-damper
   floatingDistance: 0.3,
   rayLength: 0.8,
   springStrength: 1.2,
   springDamping: 0.08,
+
+  // Movement
   moveForce: 30,
+  sprintMultiplier: 1.8,
+  airControlMultiplier: 0.3,
   maxVelocity: 8,
-  jumpForce: 8,
-  coyoteTime: 150,  // ms
+  sprintMaxVelocity: 14,
+
+  // Jump
+  jumpForce: 12,
+  coyoteTime: 150,      // ms
+  jumpBufferTime: 100,  // ms
+
+  // Ground detection
+  groundedThreshold: 0.05,
+  slopeLimit: 50,       // degrees
+
+  // Physics properties
+  mass: 1,
+  friction: 0.0,
+  linearDamping: 0.5,
+  angularDamping: 1.0,
 }
 ```
 
@@ -53,6 +74,8 @@ floatingCapsule: {
 | springDamping | Less bouncy | More bouncy |
 | moveForce | Fast accel | Slow start |
 | jumpForce | Higher | Lower |
+| sprintMultiplier | Faster sprint | Slower sprint |
+| airControlMultiplier | More air control | Less air control |
 
 ### vs Kinematic
 
@@ -75,12 +98,13 @@ const y = getHeightAt(x, z, heights, config.terrain);
 
 ```typescript
 terrain: {
-  size: 100,
-  segments: 128,
-  noiseScale: 0.02,
-  amplitude: 2.5,
-  octaves: 4,
-  seed: 42,
+  size: 100,          // World units
+  segments: 128,      // Grid resolution
+  noiseScale: 0.015,  // Frequency (lower = larger hills)
+  amplitude: 5,       // Max height variation
+  octaves: 5,         // Detail layers
+  persistence: 0.45,  // Amplitude falloff per octave
+  seed: 42,           // Deterministic seed
 }
 ```
 

@@ -146,7 +146,11 @@ class Experience {
 
   private update(delta: number, elapsed: number): void {
     // Sync transforms from physics with interpolation
-    const newPhysicsFrame = this.transformSync.update(this.world.getEntities());
+    // Pass camera position for distance-based culling
+    const newPhysicsFrame = this.transformSync.update(
+      this.world.getEntities(),
+      this.camera.instance.position,
+    );
 
     // Update world (entities, animations, lifecycle hooks)
     this.world.update(delta, elapsed, newPhysicsFrame);

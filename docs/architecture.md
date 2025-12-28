@@ -11,7 +11,7 @@ Multi-worker Three.js + Rapier physics.
 │       ├─ EntityCoordinator                                       │
 │       │   ├─ WorldSpawner, PlayerSpawner                        │
 │       │   └─ BoxSpawner, SphereSpawner                          │
-│       ├─ InputRouter, AudioBridge                               │
+│       ├─ InputRouter, AudioBridge, AudioManager                 │
 │       ├─ InputManager, DebugManager, UIManager                  │
 │       └─ ResizeHandler, SpawnHandler                            │
 └─────────────────────────────────────────────────────────────────┘
@@ -32,7 +32,8 @@ Multi-worker Three.js + Rapier physics.
 | WorkerCoordinator | Worker lifecycle |
 | EntityCoordinator | Entity orchestration via sub-spawners |
 | InputRouter | Route input → workers |
-| AudioBridge | Audio callbacks → AudioManager |
+| AudioManager | Web Audio API, spatial sound |
+| AudioBridge | Wire audio callbacks → AudioManager |
 | UIManager | Loading screen, errors, spawner UI |
 | DebugManager | Tweakpane + Stats.js |
 
@@ -110,7 +111,7 @@ src/
     utils/                   # LoadProgressTracker
     spawners/                # Box, Sphere, Player, World spawners
     ui/                      # UIManager
-    components/              # LoadingScreen, ErrorOverlay
+    components/              # LoadingScreen, ErrorOverlay, EntitySpawnerUI, KeyboardControlsUI
     
   renderer/
     core/                    # Experience, Renderer, Camera
@@ -118,7 +119,7 @@ src/
     entities/                # Factory, Registry, components/
     objects/                 # InstancedMeshBase, boxes, spheres, fox
     sync/                    # TransformSync, PhysicsDebugRenderer
-    systems/                 # Time, Resources, Debug, InputState
+    systems/                 # Time, Resources, Debug, InputState, GroundRaycaster
     
   physics/
     physics-world.ts
@@ -130,6 +131,7 @@ src/
     
   shared/
     config.ts
+    debug-config.ts
     types/, buffers/, utils/
 ```
 
@@ -164,6 +166,7 @@ await renderApi.spawnEntity(id, "player");
 Control: [FrameCounter, EntityCount, EntityIds...]
 Timing:  [CurrentTime, PreviousTime, Interval]
 Transform: [Entity0 Current(7), Entity0 Previous(7), Entity1...]
+Flags: [Entity0 Flags, Entity1 Flags, ...] (grounded state)
 ```
 
 Uses Atomics for thread-safe sync.
@@ -187,6 +190,16 @@ InstancedBoxes/InstancedSpheres extend InstancedMeshBase:
 - O(1) removal (swap-with-last)
 - Per-instance scales
 
+## Audio System
+
+See `docs/audio.md`.
+
+Main thread AudioManager with spatial audio:
+- Footsteps from player animation
+- Collision sounds via AudioBridge
+- Jump/land from player state
+- Camera-based listener position
+
 ## UI Components
 
 | Component | Location | Purpose |
@@ -194,6 +207,7 @@ InstancedBoxes/InstancedSpheres extend InstancedMeshBase:
 | LoadingScreen | `app/components/` | Loading progress + start |
 | ErrorOverlay | `app/components/` | Error display |
 | EntitySpawnerUI | `app/components/` | Shape/size config + 3D preview |
+| KeyboardControlsUI | `app/components/` | WASD/Space overlay |
 
 EntitySpawnerUI has embedded WebGLRenderer for preview (80×80, main thread).
 

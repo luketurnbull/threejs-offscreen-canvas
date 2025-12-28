@@ -33,6 +33,25 @@ const TIMING_PREVIOUS_TIME_INDEX = 1;
 const TIMING_INTERVAL_INDEX = 2;
 const TIMING_BUFFER_SIZE = 3;
 
+// Transform data layout per entity (indices within FLOATS_PER_ENTITY block)
+// Current transform: indices 0-6
+const CURRENT_POS_X = 0;
+const CURRENT_POS_Y = 1;
+const CURRENT_POS_Z = 2;
+const CURRENT_ROT_X = 3;
+const CURRENT_ROT_Y = 4;
+const CURRENT_ROT_Z = 5;
+const CURRENT_ROT_W = 6;
+// Previous transform: indices 7-13
+const PREVIOUS_POS_X = 7;
+const PREVIOUS_POS_Y = 8;
+const PREVIOUS_POS_Z = 9;
+const PREVIOUS_ROT_X = 10;
+const PREVIOUS_ROT_Y = 11;
+const PREVIOUS_ROT_Z = 12;
+const PREVIOUS_ROT_W = 13;
+const FLOATS_PER_TRANSFORM = 7;
+
 /**
  * Transform data for a single frame
  */
@@ -244,23 +263,20 @@ export class SharedTransformBuffer {
 
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
-    // Shift current → previous (indices 7-13)
-    this.transformView[offset + 7] = this.transformView[offset + 0];
-    this.transformView[offset + 8] = this.transformView[offset + 1];
-    this.transformView[offset + 9] = this.transformView[offset + 2];
-    this.transformView[offset + 10] = this.transformView[offset + 3];
-    this.transformView[offset + 11] = this.transformView[offset + 4];
-    this.transformView[offset + 12] = this.transformView[offset + 5];
-    this.transformView[offset + 13] = this.transformView[offset + 6];
+    // Shift current → previous
+    for (let i = 0; i < FLOATS_PER_TRANSFORM; i++) {
+      this.transformView[offset + FLOATS_PER_TRANSFORM + i] =
+        this.transformView[offset + i];
+    }
 
-    // Write new current (indices 0-6)
-    this.transformView[offset + 0] = posX;
-    this.transformView[offset + 1] = posY;
-    this.transformView[offset + 2] = posZ;
-    this.transformView[offset + 3] = rotX;
-    this.transformView[offset + 4] = rotY;
-    this.transformView[offset + 5] = rotZ;
-    this.transformView[offset + 6] = rotW;
+    // Write new current
+    this.transformView[offset + CURRENT_POS_X] = posX;
+    this.transformView[offset + CURRENT_POS_Y] = posY;
+    this.transformView[offset + CURRENT_POS_Z] = posZ;
+    this.transformView[offset + CURRENT_ROT_X] = rotX;
+    this.transformView[offset + CURRENT_ROT_Y] = rotY;
+    this.transformView[offset + CURRENT_ROT_Z] = rotZ;
+    this.transformView[offset + CURRENT_ROT_W] = rotW;
   }
 
   /**
@@ -332,22 +348,22 @@ export class SharedTransformBuffer {
 
     return {
       current: {
-        posX: this.transformView[offset + 0],
-        posY: this.transformView[offset + 1],
-        posZ: this.transformView[offset + 2],
-        rotX: this.transformView[offset + 3],
-        rotY: this.transformView[offset + 4],
-        rotZ: this.transformView[offset + 5],
-        rotW: this.transformView[offset + 6],
+        posX: this.transformView[offset + CURRENT_POS_X],
+        posY: this.transformView[offset + CURRENT_POS_Y],
+        posZ: this.transformView[offset + CURRENT_POS_Z],
+        rotX: this.transformView[offset + CURRENT_ROT_X],
+        rotY: this.transformView[offset + CURRENT_ROT_Y],
+        rotZ: this.transformView[offset + CURRENT_ROT_Z],
+        rotW: this.transformView[offset + CURRENT_ROT_W],
       },
       previous: {
-        posX: this.transformView[offset + 7],
-        posY: this.transformView[offset + 8],
-        posZ: this.transformView[offset + 9],
-        rotX: this.transformView[offset + 10],
-        rotY: this.transformView[offset + 11],
-        rotZ: this.transformView[offset + 12],
-        rotW: this.transformView[offset + 13],
+        posX: this.transformView[offset + PREVIOUS_POS_X],
+        posY: this.transformView[offset + PREVIOUS_POS_Y],
+        posZ: this.transformView[offset + PREVIOUS_POS_Z],
+        rotX: this.transformView[offset + PREVIOUS_ROT_X],
+        rotY: this.transformView[offset + PREVIOUS_ROT_Y],
+        rotZ: this.transformView[offset + PREVIOUS_ROT_Z],
+        rotW: this.transformView[offset + PREVIOUS_ROT_W],
       },
     };
   }

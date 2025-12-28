@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
 import { SharedTransformBuffer } from "~/shared/buffers";
+import { config } from "~/shared/config";
 import type { RenderComponent } from "../entities";
 import type InstancedBoxes from "../objects/instanced-boxes";
 import type InstancedSpheres from "../objects/instanced-spheres";
@@ -13,8 +14,9 @@ import type InstancedSpheres from "../objects/instanced-spheres";
  * - Calculates interpolation alpha based on time since physics frame
  * - Interpolates between PREVIOUS and CURRENT physics states
  *
- * This decouples physics (fixed timestep) from rendering (variable timestep)
- * for smooth motion regardless of frame rate.
+ * Distance-based culling:
+ * - Skips transform updates for instances beyond fog range
+ * - Saves matrix calculations for off-screen objects
  *
  * @see https://gafferongames.com/post/fix_your_timestep/
  */
@@ -32,8 +34,19 @@ class TransformSync {
   private tempPosition = new THREE.Vector3();
   private tempQuaternion = new THREE.Quaternion();
 
+  // Distance culling threshold (fog far + margin)
+  private readonly cullDistance: number;
+  private readonly cullDistanceSq: number;
+
+  // Camera position for distance culling (updated each frame)
+  private cameraPosition = new THREE.Vector3();
+
   constructor(sharedBuffer: SharedTransformBuffer) {
     this.sharedBuffer = sharedBuffer;
+
+    // Cull instances beyond fog with margin
+    this.cullDistance = config.fog.enabled ? config.fog.far + 10 : Infinity;
+    this.cullDistanceSq = this.cullDistance * this.cullDistance;
   }
 
   /**
@@ -75,12 +88,21 @@ class TransformSync {
    * Update transforms for all entities with interpolation
    *
    * @param entities - Map of entities to update
+   * @param cameraPosition - Camera position for distance culling (optional)
    * @returns true if a new physics frame was available
    */
-  update(entities: Map<EntityId, RenderComponent>): boolean {
+  update(
+    entities: Map<EntityId, RenderComponent>,
+    cameraPosition?: THREE.Vector3,
+  ): boolean {
     const now = performance.now();
     const currentFrame = this.sharedBuffer.getFrameCounter();
     const newFrameAvailable = currentFrame !== this.lastPhysicsFrame;
+
+    // Update camera position for culling
+    if (cameraPosition) {
+      this.cameraPosition.copy(cameraPosition);
+    }
 
     // Read timing information once (same for all entities)
     const timing = this.sharedBuffer.readFrameTiming();
@@ -111,7 +133,26 @@ class TransformSync {
   }
 
   /**
+   * Check if position is within cull distance of camera
+   */
+  private isWithinCullDistance(
+    posX: number,
+    posY: number,
+    posZ: number,
+  ): boolean {
+    if (this.cullDistance === Infinity) return true;
+
+    const dx = posX - this.cameraPosition.x;
+    const dy = posY - this.cameraPosition.y;
+    const dz = posZ - this.cameraPosition.z;
+    const distSq = dx * dx + dy * dy + dz * dz;
+
+    return distSq <= this.cullDistanceSq;
+  }
+
+  /**
    * Update all instanced box transforms with interpolation
+   * Skips instances beyond fog range for performance
    */
   private updateInstancedBoxes(alpha: number): void {
     if (!this.instancedBoxes) return;
@@ -122,7 +163,21 @@ class TransformSync {
       const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
       if (bufferIndex < 0) continue;
 
-      this.interpolateTransform(bufferIndex, alpha);
+      // Read current position for distance check (before full interpolation)
+      const transforms = this.sharedBuffer.readTransform(bufferIndex);
+
+      // Skip if beyond cull distance
+      if (
+        !this.isWithinCullDistance(
+          transforms.current.posX,
+          transforms.current.posY,
+          transforms.current.posZ,
+        )
+      ) {
+        continue;
+      }
+
+      this.interpolateTransformFromData(transforms, alpha);
 
       // Update the instance
       this.instancedBoxes.updateInstance(
@@ -138,6 +193,7 @@ class TransformSync {
 
   /**
    * Update all instanced sphere transforms with interpolation
+   * Skips instances beyond fog range for performance
    */
   private updateInstancedSpheres(alpha: number): void {
     if (!this.instancedSpheres) return;
@@ -148,7 +204,21 @@ class TransformSync {
       const bufferIndex = this.sharedBuffer.getEntityIndex(entityId);
       if (bufferIndex < 0) continue;
 
-      this.interpolateTransform(bufferIndex, alpha);
+      // Read current position for distance check
+      const transforms = this.sharedBuffer.readTransform(bufferIndex);
+
+      // Skip if beyond cull distance
+      if (
+        !this.isWithinCullDistance(
+          transforms.current.posX,
+          transforms.current.posY,
+          transforms.current.posZ,
+        )
+      ) {
+        continue;
+      }
+
+      this.interpolateTransformFromData(transforms, alpha);
 
       // Update the instance
       this.instancedSpheres.updateInstance(
@@ -163,12 +233,12 @@ class TransformSync {
   }
 
   /**
-   * Interpolate transform from shared buffer into temp objects
+   * Interpolate transform from pre-read data into temp objects
    */
-  private interpolateTransform(bufferIndex: number, alpha: number): void {
-    // Read both previous and current transforms from shared buffer
-    const transforms = this.sharedBuffer.readTransform(bufferIndex);
-
+  private interpolateTransformFromData(
+    transforms: { current: any; previous: any },
+    alpha: number,
+  ): void {
     // Interpolate position
     this.tempPosition.set(
       this.lerp(transforms.previous.posX, transforms.current.posX, alpha),
@@ -197,6 +267,14 @@ class TransformSync {
   }
 
   /**
+   * Interpolate transform from shared buffer into temp objects
+   */
+  private interpolateTransform(bufferIndex: number, alpha: number): void {
+    const transforms = this.sharedBuffer.readTransform(bufferIndex);
+    this.interpolateTransformFromData(transforms, alpha);
+  }
+
+  /**
    * Apply interpolated transform to a single entity
    *
    * @param entity - The entity to update
@@ -221,11 +299,6 @@ class TransformSync {
 
   /**
    * Linear interpolation helper
-   *
-   * @param a - Start value
-   * @param b - End value
-   * @param t - Interpolation factor [0, 1]
-   * @returns Interpolated value
    */
   private lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
@@ -235,7 +308,6 @@ class TransformSync {
    * Dispose of resources
    */
   dispose(): void {
-    // Reset state - temporary objects will be garbage collected
     this.lastPhysicsFrame = 0;
     this.instancedBoxes = null;
     this.instancedSpheres = null;
