@@ -1,6 +1,7 @@
 import CanvasProvider from "./providers/canvas-provider";
 import InputManager from "./managers/input-manager";
 import DebugManager from "./managers/debug";
+import TouchInputHandler from "./managers/touch-input-handler";
 import UIManager, { ErrorOverlay } from "./ui/ui-manager";
 import WorkerCoordinator from "./coordinators/worker-coordinator";
 import EntityCoordinator from "./coordinators/entity-coordinator";
@@ -21,6 +22,7 @@ export default class App {
   private coordinator: WorkerCoordinator;
   private entities: EntityCoordinator | null = null;
   private inputRouter: InputRouter | null = null;
+  private touchHandler: TouchInputHandler | null = null;
   private spawnHandler: SpawnHandler | null = null;
   private resizeHandler: ResizeHandler | null = null;
   private _initialized = false;
@@ -88,6 +90,16 @@ export default class App {
     const spawnerUI = this.ui.createSpawnerUI();
     this.ui.createKeyboardControlsUI();
     this.spawnHandler = new SpawnHandler(spawnerUI, this.entities, renderApi);
+
+    // Setup mobile touch controls if on mobile device
+    if (this.ui.isMobileDevice) {
+      const { joystick, jumpButton } = this.ui.createMobileControls();
+      this.touchHandler = new TouchInputHandler(
+        joystick,
+        jumpButton,
+        this.inputRouter,
+      );
+    }
 
     this.coordinator.getAudioBridge().setupCallbacks(physicsApi, renderApi);
     await this.entities.initWorld();
@@ -159,12 +171,14 @@ export default class App {
     this.input.dispose();
     this.debug.dispose();
     this.spawnHandler?.dispose();
+    this.touchHandler?.dispose();
     this.inputRouter?.dispose();
     this.entities?.dispose();
     this.coordinator.dispose();
 
     this.resizeHandler = null;
     this.spawnHandler = null;
+    this.touchHandler = null;
     this.inputRouter = null;
     this.entities = null;
     this._initialized = false;

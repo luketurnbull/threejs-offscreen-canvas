@@ -82,6 +82,48 @@ export default class InputRouter {
   }
 
   /**
+   * Set movement input directly (for touch controls)
+   * Also syncs to render worker for animations
+   */
+  setMovementInput(input: MovementInput): void {
+    // Track what changed for syncing to render
+    const prevInput = this.currentInput;
+    this.currentInput = { ...input };
+
+    // Send to physics
+    this.physicsApi.setPlayerInput(this.currentInput);
+
+    // Sync to render worker via synthetic key events for animations
+    this.syncKeyToRender("w", prevInput.forward, input.forward);
+    this.syncKeyToRender("s", prevInput.backward, input.backward);
+    this.syncKeyToRender("a", prevInput.left, input.left);
+    this.syncKeyToRender("d", prevInput.right, input.right);
+    this.syncKeyToRender("shift", prevInput.sprint, input.sprint);
+  }
+
+  /**
+   * Send synthetic key event to render if state changed
+   */
+  private syncKeyToRender(
+    key: string,
+    wasPressed: boolean,
+    isPressed: boolean,
+  ): void {
+    if (wasPressed === isPressed) return;
+
+    const event: SerializedInputEvent = {
+      type: isPressed ? "keydown" : "keyup",
+      key,
+      code: key === "shift" ? "ShiftLeft" : `Key${key.toUpperCase()}`,
+      ctrlKey: false,
+      shiftKey: key === "shift" ? isPressed : false,
+      metaKey: false,
+      repeat: false,
+    };
+    this.renderApi.handleInput(event);
+  }
+
+  /**
    * Dispose of resources
    */
   dispose(): void {

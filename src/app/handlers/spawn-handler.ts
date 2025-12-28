@@ -11,16 +11,23 @@
 import type { Remote } from "comlink";
 import type { RenderApi, SerializedClickEvent } from "~/shared/types";
 import { config } from "~/shared/config";
-import type { EntitySpawnerUI } from "../components/entity-spawner-ui";
+import type { SpawnConfig } from "../components/entity-spawner-ui";
 import type EntityCoordinator from "../coordinators/entity-coordinator";
 
+/**
+ * Interface for UI components that provide spawn configuration
+ */
+interface SpawnConfigProvider {
+  getSpawnConfig(): SpawnConfig;
+}
+
 export default class SpawnHandler {
-  private ui: EntitySpawnerUI;
+  private ui: SpawnConfigProvider;
   private entities: EntityCoordinator;
   private renderApi: Remote<RenderApi>;
 
   constructor(
-    ui: EntitySpawnerUI,
+    ui: SpawnConfigProvider,
     entities: EntityCoordinator,
     renderApi: Remote<RenderApi>,
   ) {
