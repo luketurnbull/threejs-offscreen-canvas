@@ -15,6 +15,7 @@ High-performance Three.js + Rapier physics in dedicated Web Workers. Smooth 120H
 - **Entity System** - Factory + registry pattern
 - **TypeScript** - Full type safety with branded EntityIds
 - **Debug Tools** - Tweakpane, Stats.js, physics collider visualization
+- **Responsive Controls** - Desktop keyboard + mobile touch (joystick, jump button)
 
 ## Quick Start
 
@@ -23,7 +24,10 @@ bun install
 bun run dev
 ```
 
-Open `http://localhost:5173` - WASD to move, Space to jump, Shift to sprint.
+Open `http://localhost:5173`
+
+**Desktop:** WAD to move, Space to jump, Shift to sprint  
+**Mobile:** Virtual joystick (bottom-right), Jump button (bottom-left)
 
 Add `#debug` for debug controls and performance stats.
 
@@ -80,6 +84,7 @@ src/
     managers/
       audio-manager.ts       # Web Audio API
       input-manager.ts       # DOM events
+      touch-input-handler.ts # Mobile touch→input
       debug/                 # Tweakpane + Stats.js
     handlers/
       resize-handler.ts
@@ -90,6 +95,8 @@ src/
       input-router.ts        # Input→workers
     providers/
       canvas-provider.ts     # OffscreenCanvas
+    utils/
+      device-detector.ts     # Mobile/touch detection
     spawners/
       box-spawner.ts, sphere-spawner.ts
       player-spawner.ts, world-spawner.ts
@@ -98,8 +105,11 @@ src/
     components/
       loading-screen.ts
       error-overlay.ts
-      entity-spawner-ui.ts
-      keyboard-controls-ui.ts
+      entity-spawner-ui.ts   # Desktop spawner
+      keyboard-controls-ui.ts # Desktop controls overlay
+      virtual-joystick.ts    # Mobile joystick
+      jump-button.ts         # Mobile jump
+      mobile-spawner-menu.ts # Mobile spawner
     
   renderer/                  # Three.js (worker)
     core/

@@ -40,6 +40,7 @@ src/
     managers/
       audio-manager.ts       # Web Audio API
       input-manager.ts       # DOM events
+      touch-input-handler.ts # Mobile: touch→input bridge
       debug/                 # Tweakpane + Stats.js
         index.ts             # DebugManager facade
         tweakpane-manager.ts
@@ -55,6 +56,7 @@ src/
       canvas-provider.ts     # OffscreenCanvas
     utils/
       load-progress-tracker.ts
+      device-detector.ts     # Mobile/touch detection
     spawners/
       box-spawner.ts
       sphere-spawner.ts
@@ -179,6 +181,14 @@ Create in `renderer/entities/components/`, register in `renderer/entities/index.
 
 Lifecycle hooks: `onTransformUpdate`, `onPhysicsFrame`, `onRenderFrame`, `dispose`.
 
+### Adding Touch Controls
+
+1. Create Web Component in `src/app/components/`
+2. Shadow DOM for style isolation
+3. Emit custom events (e.g., `joystick-move`, `jump-start`)
+4. Register in `TouchInputHandler`
+5. Wire in `UIManager.createMobileControls()`
+
 ### Entity System
 
 ```typescript
@@ -224,6 +234,31 @@ Main thread AudioManager with spatial audio. See `docs/audio.md`.
 - Collision sounds from physics events via AudioBridge
 - Jump/land from player state callbacks
 - Spatial positioning from camera listener
+
+### Mobile Touch Controls
+
+Responsive UI switches between desktop/mobile. No backward movement on either platform.
+
+**Device Detection** (`src/app/utils/device-detector.ts`):
+- `isTouchDevice()` - touch capability check
+- `isMobile()` - touch + width < 1024
+
+**Touch Components**:
+- `VirtualJoystick` - 120px base, distance controls sprint (>0.7 = sprint)
+- `JumpButton` - 70px circular, hold for jump buffer
+- `MobileSpawnerMenu` - collapsed button → modal overlay
+
+**Diagonal Movement** (mobile joystick):
+- Forward threshold: 0.2 (active until ~78° from up)
+- Turn threshold: 0.5 (starts at ~30° from up)
+- Creates overlap zone for smooth diagonal movement
+
+**Input Flow**:
+```
+Touch Events → TouchInputHandler → InputRouter.setMovementInput()
+                                         ↓
+                              PhysicsWorker + RenderWorker (synthetic keys)
+```
 
 ## GLSL Shaders
 
