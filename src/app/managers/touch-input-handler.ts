@@ -75,6 +75,11 @@ export default class TouchInputHandler {
    *
    * Angle convention: 0 = up (forward), PI/2 = right, PI = down, -PI/2 = left
    * Distance > 0.7 triggers sprint
+   *
+   * Uses separate thresholds for smooth diagonal movement:
+   * - Forward zone: 0° to ±78° (forwardThreshold = 0.2)
+   * - Turn zone: ±30° to ±150° (turnThreshold = 0.5)
+   * - Diagonal overlap: ±30° to ±78° (both forward + turn active)
    */
   private joystickToMovement(state: JoystickState): Partial<MovementInput> {
     if (!state.active || state.distance < 0.1) {
@@ -92,13 +97,19 @@ export default class TouchInputHandler {
     // sin(PI/2) = 1 = right, sin(-PI/2) = -1 = left
     const forwardAmount = Math.cos(state.angle);
     const rightAmount = Math.sin(state.angle);
-    const threshold = 0.3;
+
+    // Separate thresholds for smooth diagonal transitions
+    // forwardThreshold 0.2 = forward active until ~78° from up
+    // turnThreshold 0.5 = turn starts at ~30° from up
+    // This creates diagonal zones where both are active
+    const forwardThreshold = 0.2;
+    const turnThreshold = 0.5;
 
     return {
-      forward: forwardAmount > threshold,
-      backward: forwardAmount < -threshold,
-      right: rightAmount > threshold,
-      left: rightAmount < -threshold,
+      forward: forwardAmount > forwardThreshold,
+      backward: false, // Backward movement disabled
+      right: rightAmount > turnThreshold,
+      left: rightAmount < -turnThreshold,
       sprint: state.distance > 0.7,
     };
   }

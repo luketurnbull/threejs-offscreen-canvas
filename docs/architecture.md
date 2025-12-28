@@ -206,10 +206,25 @@ Main thread AudioManager with spatial audio:
 |-----------|----------|---------|
 | LoadingScreen | `app/components/` | Loading progress + start |
 | ErrorOverlay | `app/components/` | Error display |
-| EntitySpawnerUI | `app/components/` | Shape/size config + 3D preview |
-| KeyboardControlsUI | `app/components/` | WASD/Space overlay |
+| EntitySpawnerUI | `app/components/` | Desktop: shape/size config + 3D preview |
+| KeyboardControlsUI | `app/components/` | Desktop: WAD/Space overlay |
+| VirtualJoystick | `app/components/` | Mobile: touch joystick (bottom-right) |
+| JumpButton | `app/components/` | Mobile: jump button (bottom-left) |
+| MobileSpawnerMenu | `app/components/` | Mobile: collapsed spawner → modal |
 
 EntitySpawnerUI has embedded WebGLRenderer for preview (80×80, main thread).
+
+## Mobile Touch Controls
+
+On touch devices, the UI switches to mobile-optimized controls:
+
+- **VirtualJoystick** - Circular touch joystick with diagonal movement support
+  - Distance > 70% triggers sprint (orange visual feedback)
+  - Smooth diagonal zones for forward+turn combinations
+- **JumpButton** - Simple touch button for jumping
+- **MobileSpawnerMenu** - Collapsed button that opens modal for shape/size selection
+
+Device detection via `src/app/utils/device-detector.ts`. Touch input bridged to physics via `TouchInputHandler`.
 
 ## Browser Support
 

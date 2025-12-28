@@ -326,10 +326,7 @@ export default class FloatingCapsuleController {
       moveX += Math.sin(this.rotationY);
       moveZ += Math.cos(this.rotationY);
     }
-    if (this.input.backward) {
-      moveX -= Math.sin(this.rotationY);
-      moveZ -= Math.cos(this.rotationY);
-    }
+    // Note: backward movement intentionally disabled - forward-only movement
 
     // Normalize if moving diagonally
     const length = Math.sqrt(moveX * moveX + moveZ * moveZ);

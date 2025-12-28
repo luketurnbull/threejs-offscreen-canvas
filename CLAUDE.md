@@ -65,8 +65,11 @@ src/
     components/
       loading-screen.ts
       error-overlay.ts
-      entity-spawner-ui.ts   # Shape/size selector + 3D preview
-      keyboard-controls-ui.ts # WASD/Space overlay
+      entity-spawner-ui.ts   # Desktop: shape/size selector + 3D preview
+      keyboard-controls-ui.ts # Desktop: WAD/Space overlay
+      virtual-joystick.ts    # Mobile: touch joystick
+      jump-button.ts         # Mobile: jump button
+      mobile-spawner-menu.ts # Mobile: collapsed spawner → modal
     
   renderer/                  # Three.js (worker)
     core/

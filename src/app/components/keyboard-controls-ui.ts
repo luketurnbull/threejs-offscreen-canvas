@@ -91,7 +91,6 @@ export class KeyboardControlsUI extends HTMLElement {
           <div class="wasd-row">
             <div class="key" data-key="shift">⇧</div>
             <div class="key" data-key="a">A</div>
-            <div class="key" data-key="s">S</div>
             <div class="key" data-key="d">D</div>
           </div>
         </div>
@@ -112,7 +111,7 @@ export class KeyboardControlsUI extends HTMLElement {
     if (e.code === "Space") return "space";
     if (e.key === "Shift") return "shift";
     const k = e.key.toLowerCase();
-    if (["w", "a", "s", "d"].includes(k)) return k;
+    if (["w", "a", "d"].includes(k)) return k;
     return null;
   }
 

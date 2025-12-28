@@ -61,12 +61,12 @@ export class PlayerEntity implements RenderComponent {
     const isGrounded = (flags & EntityFlags.GROUNDED) !== 0;
 
     const isForward = inputState.isKeyDown("w");
-    const isBackward = inputState.isKeyDown("s");
+    // Note: backward (S key) intentionally disabled - forward-only movement
     const isTurnLeft = inputState.isKeyDown("a");
     const isTurnRight = inputState.isKeyDown("d");
     const isRunning = inputState.isKeyDown("shift");
 
-    const isMoving = isForward || isBackward;
+    const isMoving = isForward;
     const isTurning = isTurnLeft || isTurnRight;
 
     // Track state for footsteps (only emit when grounded)

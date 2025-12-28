@@ -53,10 +53,7 @@ export default class InputRouter {
           this.currentInput.forward = pressed;
           inputChanged = true;
           break;
-        case "s":
-          this.currentInput.backward = pressed;
-          inputChanged = true;
-          break;
+        // Note: backward (S key) intentionally removed - forward-only movement
         case "a":
           this.currentInput.left = pressed;
           inputChanged = true;
@@ -95,7 +92,7 @@ export default class InputRouter {
 
     // Sync to render worker via synthetic key events for animations
     this.syncKeyToRender("w", prevInput.forward, input.forward);
-    this.syncKeyToRender("s", prevInput.backward, input.backward);
+    // Note: backward not synced - forward-only movement
     this.syncKeyToRender("a", prevInput.left, input.left);
     this.syncKeyToRender("d", prevInput.right, input.right);
     this.syncKeyToRender("shift", prevInput.sprint, input.sprint);
