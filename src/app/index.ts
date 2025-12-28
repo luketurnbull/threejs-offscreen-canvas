@@ -86,6 +86,7 @@ export default class App {
     this.inputRouter = new InputRouter(physicsApi, renderApi);
 
     const spawnerUI = this.ui.createSpawnerUI();
+    this.ui.createKeyboardControlsUI();
     this.spawnHandler = new SpawnHandler(spawnerUI, this.entities, renderApi);
 
     this.coordinator.getAudioBridge().setupCallbacks(physicsApi, renderApi);
