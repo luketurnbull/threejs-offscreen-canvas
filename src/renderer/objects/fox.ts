@@ -41,6 +41,9 @@ export default class Fox {
   speed: number = 1;
   crossFadeDuration: number = config.animations.crossFadeDuration;
 
+  // Track current animation by name (not action ref) to distinguish "jumping" from "running"
+  currentAnimation: "idle" | "walking" | "running" | "jumping" = "idle";
+
   constructor(scene: THREE.Scene, resources: Resources, debug?: Debug) {
     this.scene = scene;
     this.resource = resources.items.foxModel as GLTF;
@@ -140,8 +143,13 @@ export default class Fox {
     });
   }
 
-  play(name: "idle" | "walking" | "running") {
-    const newAction = this.actions[name];
+  play(name: "idle" | "walking" | "running" | "jumping") {
+    // Early exit if already playing this animation
+    if (name === this.currentAnimation) return;
+
+    // For jumping, use the running action but with jumping speed
+    const actionName = name === "jumping" ? "running" : name;
+    const newAction = this.actions[actionName];
     const oldAction = this.actions.current;
 
     // Apply animation-specific playback speed
@@ -152,6 +160,7 @@ export default class Fox {
     newAction.crossFadeFrom(oldAction, this.crossFadeDuration, false);
 
     this.actions.current = newAction;
+    this.currentAnimation = name;
   }
 
   dispose(): void {

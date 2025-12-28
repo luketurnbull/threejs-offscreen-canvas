@@ -65,6 +65,13 @@ class TransformSync {
   }
 
   /**
+   * Get the shared buffer for passing to entities that need direct access
+   */
+  getSharedBuffer(): SharedTransformBuffer {
+    return this.sharedBuffer;
+  }
+
+  /**
    * Update transforms for all entities with interpolation
    *
    * @param entities - Map of entities to update

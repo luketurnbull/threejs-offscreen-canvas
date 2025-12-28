@@ -13,7 +13,7 @@ import type {
   DebugPhysicsUpdate,
   DebugPlayerUpdate,
 } from "~/shared/debug-config";
-import type { SharedTransformBuffer } from "~/shared/buffers";
+import { type SharedTransformBuffer, EntityFlags } from "~/shared/buffers";
 import { config } from "~/shared/config";
 import { generateTerrainHeights } from "~/shared/utils";
 import FloatingCapsuleController from "./floating-capsule-controller";
@@ -435,6 +435,17 @@ export default class PhysicsWorld {
 
     // Update player movement via floating capsule controller
     this.floatingController?.update(deltaSeconds);
+
+    // Write player grounded state to flags buffer for animation
+    if (this.floatingController && this.playerId !== null) {
+      const playerIndex = this.entityIndices.get(this.playerId);
+      if (playerIndex !== undefined) {
+        const flags = this.floatingController.getIsGrounded()
+          ? EntityFlags.GROUNDED
+          : 0;
+        this.sharedBuffer.writeEntityFlags(playerIndex, flags);
+      }
+    }
 
     // Step the physics world
     this.world.step(this.eventQueue);

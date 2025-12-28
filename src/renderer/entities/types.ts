@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { EntityId } from "~/shared/types";
+import type { SharedTransformBuffer } from "~/shared/buffers";
 import type Resources from "../systems/resources";
 import type Time from "../systems/time";
 import type Debug from "../systems/debug";
@@ -25,6 +26,9 @@ export interface EntityContext {
 
   /** Input state for keyboard/mouse tracking */
   inputState: InputState;
+
+  /** Shared transform buffer for reading entity state flags */
+  sharedBuffer: SharedTransformBuffer;
 }
 
 /**

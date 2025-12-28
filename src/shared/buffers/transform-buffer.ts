@@ -56,6 +56,14 @@ export interface FrameTiming {
 }
 
 /**
+ * Entity state flags (bitfield)
+ * Used for per-entity state like grounded status
+ */
+export const EntityFlags = {
+  GROUNDED: 0b00000001, // bit 0 = isGrounded
+} as const;
+
+/**
  * SharedTransformBuffer - Zero-copy transform synchronization between workers
  *
  * Uses SharedArrayBuffer for direct memory sharing between Physics and Render workers.
@@ -65,6 +73,7 @@ export interface FrameTiming {
  * - controlBuffer (Int32Array): frame counter + entity IDs for synchronization
  * - transformBuffer (Float32Array): previous + current position/rotation data per entity
  * - timingBuffer (Float64Array): physics frame timestamps for interpolation
+ * - flagsBuffer (Uint8Array): per-entity state flags (grounded, etc.)
  *
  * The double-buffered transforms (previous + current) combined with timestamps
  * enable smooth interpolation without discontinuities when new physics frames arrive.
@@ -76,10 +85,12 @@ export class SharedTransformBuffer {
   private controlSAB: SharedArrayBuffer;
   private transformSAB: SharedArrayBuffer;
   private timingSAB: SharedArrayBuffer;
+  private flagsSAB: SharedArrayBuffer;
 
   private controlView: Int32Array;
   private transformView: Float32Array;
   private timingView: Float64Array;
+  private flagsView: Uint8Array;
 
   private entityIndexMap: Map<EntityId, number> = new Map();
 
@@ -87,12 +98,16 @@ export class SharedTransformBuffer {
     existingControl?: SharedArrayBuffer,
     existingTransform?: SharedArrayBuffer,
     existingTiming?: SharedArrayBuffer,
+    existingFlags?: SharedArrayBuffer,
   ) {
     if (existingControl && existingTransform && existingTiming) {
       // Use existing buffers (when receiving in worker)
       this.controlSAB = existingControl;
       this.transformSAB = existingTransform;
       this.timingSAB = existingTiming;
+      this.flagsSAB =
+        existingFlags ??
+        new SharedArrayBuffer(MAX_ENTITIES * Uint8Array.BYTES_PER_ELEMENT);
     } else {
       // Create new buffers (in main thread)
       const controlSize =
@@ -100,15 +115,18 @@ export class SharedTransformBuffer {
       const transformSize =
         MAX_ENTITIES * FLOATS_PER_ENTITY * Float32Array.BYTES_PER_ELEMENT;
       const timingSize = TIMING_BUFFER_SIZE * Float64Array.BYTES_PER_ELEMENT;
+      const flagsSize = MAX_ENTITIES * Uint8Array.BYTES_PER_ELEMENT;
 
       this.controlSAB = new SharedArrayBuffer(controlSize);
       this.transformSAB = new SharedArrayBuffer(transformSize);
       this.timingSAB = new SharedArrayBuffer(timingSize);
+      this.flagsSAB = new SharedArrayBuffer(flagsSize);
     }
 
     this.controlView = new Int32Array(this.controlSAB);
     this.transformView = new Float32Array(this.transformSAB);
     this.timingView = new Float64Array(this.timingSAB);
+    this.flagsView = new Uint8Array(this.flagsSAB);
   }
 
   /**
@@ -118,11 +136,13 @@ export class SharedTransformBuffer {
     control: SharedArrayBuffer;
     transform: SharedArrayBuffer;
     timing: SharedArrayBuffer;
+    flags: SharedArrayBuffer;
   } {
     return {
       control: this.controlSAB,
       transform: this.transformSAB,
       timing: this.timingSAB,
+      flags: this.flagsSAB,
     };
   }
 
@@ -330,6 +350,31 @@ export class SharedTransformBuffer {
         rotW: this.transformView[offset + 13],
       },
     };
+  }
+
+  // ============================================
+  // Entity State Flags
+  // ============================================
+
+  /**
+   * Write entity state flags
+   * Called by Physics Worker to communicate entity state (e.g., grounded)
+   */
+  writeEntityFlags(entityIndex: number, flags: number): void {
+    if (entityIndex >= 0 && entityIndex < MAX_ENTITIES) {
+      this.flagsView[entityIndex] = flags;
+    }
+  }
+
+  /**
+   * Read entity state flags
+   * Called by Render Worker to read entity state for animation decisions
+   */
+  readEntityFlags(entityIndex: number): number {
+    if (entityIndex >= 0 && entityIndex < MAX_ENTITIES) {
+      return this.flagsView[entityIndex];
+    }
+    return 0;
   }
 
   /**

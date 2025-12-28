@@ -94,7 +94,7 @@ export const config = {
     sprintMaxVelocity: 14, // Maximum horizontal velocity (sprinting)
 
     // Jump
-    jumpForce: 8, // Impulse force for jump
+    jumpForce: 12, // Impulse force for jump
     coyoteTime: 150, // ms grace period after leaving ground
     jumpBufferTime: 100, // ms to buffer jump input before landing
 
@@ -155,6 +155,7 @@ export const config = {
       idle: 1.0,
       walking: 1.0,
       running: 1.5, // Faster animation for running
+      jumping: 0.7, // Moderate run animation for airborne
     },
   },
 

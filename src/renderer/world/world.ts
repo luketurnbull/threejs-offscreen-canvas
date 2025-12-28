@@ -89,9 +89,16 @@ class World {
   /**
    * Create scene objects after resources are loaded
    * Should be called when resources emit 'ready'
+   * Requires setTransformSync() to be called first for entity context
    */
   createSceneObjects(): void {
     const { scene, resources, time, debug, inputState } = this.context;
+
+    if (!this.transformSync) {
+      throw new Error(
+        "World.createSceneObjects requires setTransformSync() to be called first",
+      );
+    }
 
     // Create entity context and factory
     const entityContext: EntityContext = {
@@ -100,6 +107,7 @@ class World {
       time,
       debug,
       inputState,
+      sharedBuffer: this.transformSync.getSharedBuffer(),
     };
     this.entityFactory = new EntityFactory(entityContext);
 

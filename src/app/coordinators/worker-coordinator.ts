@@ -90,6 +90,7 @@ export default class WorkerCoordinator {
       control: SharedArrayBuffer;
       transform: SharedArrayBuffer;
       timing: SharedArrayBuffer;
+      flags: SharedArrayBuffer;
     },
     onProgress: (progress: number) => void,
   ): Promise<void> {
@@ -118,6 +119,7 @@ export default class WorkerCoordinator {
       control: SharedArrayBuffer;
       transform: SharedArrayBuffer;
       timing: SharedArrayBuffer;
+      flags: SharedArrayBuffer;
     },
     onProgress: (progress: number) => void,
   ): Promise<void> {

@@ -187,6 +187,16 @@ InstancedBoxes/InstancedSpheres extend InstancedMeshBase:
 - O(1) removal (swap-with-last)
 - Per-instance scales
 
+## UI Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| LoadingScreen | `app/components/` | Loading progress + start |
+| ErrorOverlay | `app/components/` | Error display |
+| EntitySpawnerUI | `app/components/` | Shape/size config + 3D preview |
+
+EntitySpawnerUI has embedded WebGLRenderer for preview (80×80, main thread).
+
 ## Browser Support
 
 Required: OffscreenCanvas, SharedArrayBuffer, ES Modules in Workers, WebGL2.

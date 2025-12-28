@@ -42,12 +42,17 @@ export default class FloatingCapsuleController {
 
   // Ground detection state
   private isGrounded = false;
-  private wasGrounded = false;
   private lastGroundedTime = 0;
   private jumpBufferedTime = 0;
   private hasJumped = false;
   private currentGroundDistance = 0;
   private lastVerticalVelocity = 0;
+
+  // Grace period to prevent animation/audio jitter on bumpy terrain
+  // Player must be airborne for this duration before triggering airborne state
+  private readonly AIRBORNE_GRACE_MS = 100;
+  private lastUngroundedTime = 0;
+  private isAirborneForAnimation = false;
 
   // Audio callback for jump/land events
   private playerStateCallback: PlayerStateCallback | null = null;
@@ -149,32 +154,58 @@ export default class FloatingCapsuleController {
     // 1. Ground detection via raycast
     this.detectGround();
 
-    // 2. Detect landing (was airborne, now grounded)
-    if (this.isGrounded && !this.wasGrounded) {
+    // 2. Update airborne state with grace period (prevents jitter on bumps)
+    this.updateAirborneState(now);
+
+    // 3. Detect landing (was airborne for animation, now grounded)
+    if (this.isGrounded && this.isAirborneForAnimation) {
+      this.isAirborneForAnimation = false;
       this.emitLandEvent();
     }
 
-    // 3. Handle jump input buffering
+    // 4. Handle jump input buffering
     this.handleJumpBuffer(now);
 
-    // 4. Apply floating force (spring-damper)
+    // 5. Apply floating force (spring-damper)
     this.applyFloatingForce();
 
-    // 5. Apply movement forces
+    // 6. Apply movement forces
     this.applyMovementForces();
 
-    // 6. Handle jump
+    // 7. Handle jump
     this.handleJump(now);
 
-    // 7. Apply rotation
+    // 8. Apply rotation
     this.applyRotation(deltaSeconds);
 
-    // 8. Clamp velocity
+    // 9. Clamp velocity
     this.clampVelocity();
 
     // Update state for next frame
-    this.wasGrounded = this.isGrounded;
     this.lastVerticalVelocity = vel.y;
+  }
+
+  /**
+   * Update airborne state with grace period to prevent jitter on bumpy terrain.
+   * Player must be ungrounded for AIRBORNE_GRACE_MS before being considered airborne.
+   * This prevents animation flickering and false landing sounds on small bumps.
+   */
+  private updateAirborneState(now: number): void {
+    if (this.isGrounded) {
+      // Reset ungrounded timer when on ground
+      this.lastUngroundedTime = 0;
+    } else {
+      // Start timing when we leave ground
+      if (this.lastUngroundedTime === 0) {
+        this.lastUngroundedTime = now;
+      }
+
+      // Only consider airborne after grace period (unless we jumped)
+      const airborneTime = now - this.lastUngroundedTime;
+      if (this.hasJumped || airborneTime >= this.AIRBORNE_GRACE_MS) {
+        this.isAirborneForAnimation = true;
+      }
+    }
   }
 
   /**
@@ -440,10 +471,11 @@ export default class FloatingCapsuleController {
   }
 
   /**
-   * Get grounded state (useful for animation sync)
+   * Get grounded state for animation/audio (uses grace period to prevent jitter)
    */
   getIsGrounded(): boolean {
-    return this.isGrounded;
+    // Return stable state: grounded OR not yet confirmed airborne
+    return this.isGrounded || !this.isAirborneForAnimation;
   }
 
   /**

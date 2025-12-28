@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { EntityId, FootstepCallback } from "~/shared/types";
+import type { SharedTransformBuffer } from "~/shared/buffers";
+import { EntityFlags } from "~/shared/buffers";
 import type { RenderComponent, EntityContext } from "../types";
 import type InputState from "../../systems/input-state";
 import { config } from "~/shared/config";
@@ -19,6 +21,9 @@ export class PlayerEntity implements RenderComponent {
 
   private fox: Fox;
 
+  // Shared buffer for reading grounded state from physics
+  private sharedBuffer: SharedTransformBuffer;
+
   // Footstep audio
   private footstepCallback: FootstepCallback | null = null;
   private lastFootstepTime = 0;
@@ -30,6 +35,9 @@ export class PlayerEntity implements RenderComponent {
     this.fox = new Fox(context.scene, context.resources, context.debug);
     this.object = this.fox.model;
     this.mixer = this.fox.mixer;
+
+    // Store buffer reference for reading grounded state
+    this.sharedBuffer = context.sharedBuffer;
   }
 
   /**
@@ -40,9 +48,18 @@ export class PlayerEntity implements RenderComponent {
   }
 
   /**
-   * Update animation state based on input when new physics frame arrives
+   * Update animation state based on input and grounded state
    */
   onPhysicsFrame(inputState: InputState): void {
+    // Read grounded state from physics via shared buffer
+    // Look up index dynamically since entity map may not be built at construction time
+    const entityIndex = this.sharedBuffer.getEntityIndex(this.id);
+    const flags =
+      entityIndex >= 0
+        ? this.sharedBuffer.readEntityFlags(entityIndex)
+        : EntityFlags.GROUNDED;
+    const isGrounded = (flags & EntityFlags.GROUNDED) !== 0;
+
     const isForward = inputState.isKeyDown("w");
     const isBackward = inputState.isKeyDown("s");
     const isTurnLeft = inputState.isKeyDown("a");
@@ -52,26 +69,26 @@ export class PlayerEntity implements RenderComponent {
     const isMoving = isForward || isBackward;
     const isTurning = isTurnLeft || isTurnRight;
 
-    // Track state for footsteps
-    this.isMoving = isMoving || isTurning;
+    // Track state for footsteps (only emit when grounded)
+    this.isMoving = isGrounded && (isMoving || isTurning);
     this.isRunning = isRunning && isMoving;
 
     // Emit footstep events
     this.emitFootstepIfNeeded();
 
+    // If airborne, play jumping animation (slow run)
+    if (!isGrounded) {
+      this.fox.play("jumping");
+      return;
+    }
+
+    // Grounded animation logic
     if (isMoving) {
-      const targetAnimation = isRunning ? "running" : "walking";
-      if (this.fox.actions.current !== this.fox.actions[targetAnimation]) {
-        this.fox.play(targetAnimation);
-      }
+      this.fox.play(isRunning ? "running" : "walking");
     } else if (isTurning) {
-      if (this.fox.actions.current !== this.fox.actions.walking) {
-        this.fox.play("walking");
-      }
+      this.fox.play("walking");
     } else {
-      if (this.fox.actions.current !== this.fox.actions.idle) {
-        this.fox.play("idle");
-      }
+      this.fox.play("idle");
     }
   }
 

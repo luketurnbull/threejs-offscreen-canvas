@@ -67,6 +67,7 @@ function createPhysicsApi(): PhysicsApi {
         sharedBuffers.control,
         sharedBuffers.transform,
         sharedBuffers.timing,
+        sharedBuffers.flags,
       );
 
       physicsWorld = new PhysicsWorld();

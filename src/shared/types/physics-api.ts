@@ -101,6 +101,7 @@ export interface SharedBuffers {
   control: SharedArrayBuffer;
   transform: SharedArrayBuffer;
   timing: SharedArrayBuffer;
+  flags: SharedArrayBuffer;
 }
 
 /**

@@ -1,1 +1,5 @@
-export { SharedTransformBuffer, isSharedArrayBufferSupported } from "./transform-buffer";
+export {
+  SharedTransformBuffer,
+  isSharedArrayBufferSupported,
+  EntityFlags,
+} from "./transform-buffer";

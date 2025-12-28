@@ -69,6 +69,7 @@ function createRenderApi(): RenderApi {
         sharedBuffers.control,
         sharedBuffers.transform,
         sharedBuffers.timing,
+        sharedBuffers.flags,
       );
 
       experience = new Experience(
