@@ -240,12 +240,12 @@ Uses native Popover API for light-dismiss behavior:
   <canvas class="preview-canvas"></canvas>
 </button>
 <div id="spawner-menu" popover>
-  <!-- Shape toggle + size slider -->
+  <!-- Segmented shape toggle + size slider -->
 </div>
 ```
 
 - Canvas preview IS the button
-- Single toggle cycles Box ⟷ Sphere
+- Segmented control toggle (cube | sphere icons with sliding indicator)
 - Works on both desktop and mobile
 
 ## Mobile Touch Controls

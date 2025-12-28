@@ -115,37 +115,67 @@ export class SpawnerUI extends HTMLElement {
           box-sizing: border-box;
         }
 
-        /* Shape toggle */
+        /* Shape toggle - segmented control */
         .shape-toggle {
-          width: 100%;
-          height: 44px;
+          display: block;
+          margin-bottom: var(--space-4, 16px);
+          cursor: pointer;
+        }
+
+        .toggle-input {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        .toggle-track {
+          display: flex;
+          position: relative;
+          background: var(--slider-track, #333);
+          border-radius: var(--radius-md, 8px);
+          padding: 4px;
+        }
+
+        .toggle-indicator {
+          position: absolute;
+          top: 4px;
+          left: 4px;
+          width: calc(50% - 4px);
+          height: calc(100% - 8px);
+          background: var(--btn-bg-active, rgba(74, 158, 255, 0.15));
+          border: 1px solid var(--btn-border-active, #4a9eff);
+          border-radius: var(--radius-sm, 6px);
+          transition: transform var(--transition-normal, 0.15s ease);
+        }
+
+        .toggle-input:checked + .toggle-track .toggle-indicator {
+          transform: translateX(100%);
+        }
+
+        .toggle-option {
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: var(--space-2, 8px);
-          border: 2px solid var(--btn-border-active, #4a9eff);
-          border-radius: var(--radius-md, 8px);
-          background: var(--btn-bg-active, rgba(74, 158, 255, 0.15));
+          height: 36px;
+          z-index: 1;
+          color: var(--color-text-muted, #666);
+          transition: color var(--transition-normal, 0.15s ease);
+        }
+
+        /* Active states based on checkbox */
+        .toggle-input:not(:checked) + .toggle-track .box-option {
           color: var(--color-text-primary, #fff);
-          font-family: inherit;
-          font-size: var(--font-size-sm, 13px);
-          font-weight: 500;
-          cursor: pointer;
-          transition: all var(--transition-normal, 0.15s ease);
-          margin-bottom: var(--space-4, 16px);
         }
 
-        .shape-toggle:hover {
-          background: rgba(74, 158, 255, 0.25);
+        .toggle-input:checked + .toggle-track .sphere-option {
+          color: var(--color-text-primary, #fff);
         }
 
-        .shape-toggle:active {
-          transform: scale(0.98);
-        }
-
-        .shape-icon {
-          display: flex;
-          align-items: center;
+        /* Focus state */
+        .toggle-input:focus-visible + .toggle-track {
+          outline: 2px solid var(--color-accent, #4a9eff);
+          outline-offset: 2px;
         }
 
         /* Size control */
@@ -224,10 +254,14 @@ export class SpawnerUI extends HTMLElement {
 
       <div id="${this.popoverId}" popover class="menu">
         <div class="menu-content">
-          <button class="shape-toggle">
-            <span class="shape-icon">${BOX_SVG}</span>
-            <span class="shape-label">Box</span>
-          </button>
+          <label class="shape-toggle">
+            <input type="checkbox" class="toggle-input" />
+            <span class="toggle-track">
+              <span class="toggle-indicator"></span>
+              <span class="toggle-option box-option">${BOX_SVG}</span>
+              <span class="toggle-option sphere-option">${SPHERE_SVG}</span>
+            </span>
+          </label>
 
           <div class="size-control">
             <label class="label">Size</label>
@@ -262,9 +296,14 @@ export class SpawnerUI extends HTMLElement {
   }
 
   private setupEventListeners(): void {
-    // Shape toggle
-    const shapeToggle = this.shadow.querySelector(".shape-toggle");
-    shapeToggle?.addEventListener("click", () => this.toggleShape());
+    // Shape toggle (checkbox change)
+    const toggleInput =
+      this.shadow.querySelector<HTMLInputElement>(".toggle-input");
+    toggleInput?.addEventListener("change", (e) => {
+      const target = e.target as HTMLInputElement;
+      this.selectedShape = target.checked ? "sphere" : "box";
+      this.shapePreview?.setShape(this.selectedShape);
+    });
 
     // Size slider
     const slider = this.shadow.querySelector<HTMLInputElement>(".slider");
@@ -272,24 +311,6 @@ export class SpawnerUI extends HTMLElement {
       const target = e.target as HTMLInputElement;
       this.setSize(parseFloat(target.value));
     });
-  }
-
-  private toggleShape(): void {
-    this.selectedShape = this.selectedShape === "box" ? "sphere" : "box";
-    this.updateShapeButton();
-    this.shapePreview?.setShape(this.selectedShape);
-  }
-
-  private updateShapeButton(): void {
-    const icon = this.shadow.querySelector(".shape-icon");
-    const label = this.shadow.querySelector(".shape-label");
-
-    if (icon) {
-      icon.innerHTML = this.selectedShape === "box" ? BOX_SVG : SPHERE_SVG;
-    }
-    if (label) {
-      label.textContent = this.selectedShape === "box" ? "Box" : "Sphere";
-    }
   }
 
   private setSize(size: number): void {
@@ -318,7 +339,14 @@ export class SpawnerUI extends HTMLElement {
   setSelectedShape(shape: "box" | "sphere"): void {
     if (this.selectedShape === shape) return;
     this.selectedShape = shape;
-    this.updateShapeButton();
+
+    // Sync checkbox state
+    const toggleInput =
+      this.shadow.querySelector<HTMLInputElement>(".toggle-input");
+    if (toggleInput) {
+      toggleInput.checked = shape === "sphere";
+    }
+
     this.shapePreview?.setShape(shape);
   }
 

@@ -291,8 +291,8 @@ Touch Events → TouchInputHandler → InputRouter.setMovementInput()
 
 Unified component for desktop and mobile using Popover API:
 - Canvas preview IS the button (click to open menu)
-- Popover menu with shape toggle + size slider
-- Single toggle button cycles Box ⟷ Sphere
+- Popover menu with segmented shape toggle + size slider
+- Segmented control with cube/sphere icons and sliding indicator
 - Uses native `popover` attribute for light-dismiss
 
 ```html
