@@ -47,7 +47,7 @@ export default class EntityCoordinator {
     await this.worldSpawner.spawnGround();
 
     // Spawn player
-    await this.playerSpawner.spawn({ position: { x: 0, y: 5, z: 0 } });
+    await this.playerSpawner.spawn({ position: { x: 0, y: 20, z: 0 } });
 
     // Spawn initial test objects
     await this.spawnInitialObjects();
@@ -57,18 +57,18 @@ export default class EntityCoordinator {
    * Spawn initial test objects (boxes and spheres)
    */
   private async spawnInitialObjects(): Promise<void> {
-    // Spawn dynamic boxes
+    // Spawn dynamic boxes (y values increased for taller terrain)
     await this.boxSpawner.spawnBatch([
-      { position: { x: 3, y: 6, z: 0 } },
-      { position: { x: 3, y: 8, z: 0 } },
-      { position: { x: 3, y: 10, z: 0 } },
+      { position: { x: 3, y: 20, z: 0 } },
+      { position: { x: 3, y: 22, z: 0 } },
+      { position: { x: 3, y: 24, z: 0 } },
     ]);
 
-    // Spawn dynamic spheres
+    // Spawn dynamic spheres (y values increased for taller terrain)
     await this.sphereSpawner.spawnBatch([
-      { position: { x: -3, y: 7, z: 0 }, radius: 0.5 },
-      { position: { x: -3, y: 9, z: 1 }, radius: 0.4 },
-      { position: { x: -3, y: 8, z: -1 }, radius: 0.6 },
+      { position: { x: -3, y: 21, z: 0 }, radius: 0.5 },
+      { position: { x: -3, y: 23, z: 1 }, radius: 0.4 },
+      { position: { x: -3, y: 22, z: -1 }, radius: 0.6 },
     ]);
   }
 
@@ -79,32 +79,31 @@ export default class EntityCoordinator {
     const boxCommands: SpawnBoxCommand[] = [];
     const sphereCommands: SpawnSphereCommand[] = [];
 
-    // Generate random box positions
+    // Generate random box positions (y increased for taller terrain)
     for (let i = 0; i < boxCount; i++) {
       boxCommands.push({
         position: {
-          x: (Math.random() - 0.5) * 20,
-          y: 5 + Math.random() * 10,
-          z: (Math.random() - 0.5) * 20,
+          x: (Math.random() - 0.5) * 40,
+          y: 20 + Math.random() * 15,
+          z: (Math.random() - 0.5) * 40,
         },
       });
     }
 
-    // Generate random sphere positions
+    // Generate random sphere positions (y increased for taller terrain)
     for (let i = 0; i < sphereCount; i++) {
       sphereCommands.push({
         position: {
-          x: (Math.random() - 0.5) * 20,
-          y: 5 + Math.random() * 10,
-          z: (Math.random() - 0.5) * 20,
+          x: (Math.random() - 0.5) * 40,
+          y: 20 + Math.random() * 15,
+          z: (Math.random() - 0.5) * 40,
         },
       });
     }
 
-    await Promise.all([
-      this.boxSpawner.spawnBatch(boxCommands),
-      this.sphereSpawner.spawnBatch(sphereCommands),
-    ]);
+    // Spawn sequentially to avoid race condition on shared buffer entity registration
+    await this.boxSpawner.spawnBatch(boxCommands);
+    await this.sphereSpawner.spawnBatch(sphereCommands);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -173,10 +172,9 @@ export default class EntityCoordinator {
       this.sphereSpawner.getEntityIds().includes(id),
     );
 
-    await Promise.all([
-      this.boxSpawner.removeBatch(boxIds),
-      this.sphereSpawner.removeBatch(sphereIds),
-    ]);
+    // Remove sequentially to avoid race condition on shared buffer
+    await this.boxSpawner.removeBatch(boxIds);
+    await this.sphereSpawner.removeBatch(sphereIds);
   }
 
   /**
@@ -197,7 +195,9 @@ export default class EntityCoordinator {
    * Clear all dynamic entities (boxes + spheres)
    */
   async clearAll(): Promise<void> {
-    await Promise.all([this.boxSpawner.clear(), this.sphereSpawner.clear()]);
+    // Clear sequentially to avoid race condition on shared buffer
+    await this.boxSpawner.clear();
+    await this.sphereSpawner.clear();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

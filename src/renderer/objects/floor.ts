@@ -12,7 +12,7 @@ export default class Floor {
   private normalTexture!: THREE.Texture;
 
   mesh: THREE.Mesh;
-  repeatRate: number = 10;
+  repeatRate: number = 100; // Scaled for larger terrain (10x)
 
   constructor(scene: THREE.Scene, resources: Resources, debug?: Debug) {
     this.scene = scene;

@@ -75,7 +75,7 @@ export default class SpawnHandler {
     } else {
       await this.entities.spawnSphere({
         position: spawnPos,
-        radius: size,
+        radius: size / 2, // Diameter matches box size
         velocity,
       });
     }

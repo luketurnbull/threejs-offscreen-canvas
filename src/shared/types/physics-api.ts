@@ -1,6 +1,10 @@
 import type { EntityId, EntitySpawnData, Transform } from "./entity";
 import type { CollisionCallback, PlayerStateCallback } from "./audio-events";
-import type { DebugPhysicsUpdate, DebugPlayerUpdate } from "../debug-config";
+import type {
+  DebugPhysicsUpdate,
+  DebugPlayerUpdate,
+  DebugWorldUpdate,
+} from "../debug-config";
 
 // ============================================
 // Physics Worker API - exposed via Comlink
@@ -237,4 +241,10 @@ export interface PhysicsApi {
    * Applied immediately to movement
    */
   updatePlayerConfig(config: DebugPlayerUpdate): void;
+
+  /**
+   * Update world config (sleep distance)
+   * Controls distance-based physics sleeping
+   */
+  updateWorldConfig(config: DebugWorldUpdate): void;
 }

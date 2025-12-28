@@ -36,8 +36,8 @@ export default class Fog {
       .addBinding(this, "near", {
         label: "Fog Near",
         min: 0,
-        max: 50,
-        step: 1,
+        max: 200, // Scaled for larger terrain
+        step: 5,
       })
       .on("change", () => {
         if (this.fog) this.fog.near = this.near;
@@ -46,9 +46,9 @@ export default class Fog {
     debugFolder
       .addBinding(this, "far", {
         label: "Fog Far",
-        min: 20,
-        max: 150,
-        step: 1,
+        min: 50,
+        max: 500, // Scaled for larger terrain
+        step: 10,
       })
       .on("change", () => {
         if (this.fog) this.fog.far = this.far;

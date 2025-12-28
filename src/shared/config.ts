@@ -18,7 +18,7 @@ export const config = {
   camera: {
     fov: 35,
     near: 0.1,
-    far: 100,
+    far: 500, // Increased for larger terrain (beyond fog)
 
     // Follow camera settings
     follow: {
@@ -33,8 +33,8 @@ export const config = {
   fog: {
     enabled: true,
     color: "#ffffff",
-    near: 15,
-    far: 40,
+    near: 10, // Pushed further for larger terrain
+    far: 60, // Less foggy, see further
   },
 
   // Sun light (directional light with shadows)
@@ -47,10 +47,10 @@ export const config = {
     shadow: {
       enabled: true,
       mapSize: 4096, // High resolution shadow map
-      cameraSize: 15, // Half-size of shadow coverage (smaller = sharper shadows)
+      cameraSize: 25, // Half-size of shadow coverage (smaller = sharper shadows)
       normalBias: 0.05,
       near: 0.1,
-      far: 100,
+      far: 200, // Increased for larger terrain
     },
   },
 
@@ -111,10 +111,10 @@ export const config = {
 
   // Terrain configuration
   terrain: {
-    size: 100, // World units (X and Z)
-    segments: 128, // Grid resolution (128x128 = 16,641 vertices)
-    noiseScale: 0.015, // Frequency (lower = larger hills)
-    amplitude: 5, // Max height variation in units
+    size: 500, // World units (X and Z) - 10x scale
+    segments: 256, // Grid resolution (256x256 = 65,536 vertices)
+    noiseScale: 0.01, // Frequency scaled down 10x for same hill density
+    amplitude: 15, // Taller hills for larger scale
     octaves: 5, // Detail layers
     persistence: 0.45, // Amplitude falloff per octave
     seed: 42, // Deterministic seed for reproducible terrain
@@ -128,10 +128,10 @@ export const config = {
   // Entity spawner (click-to-spawn)
   spawner: {
     // Spawn position offset from camera
-    spawnOffset: 2, // meters in front of camera
+    spawnOffset: 4, // meters in front of camera
 
     // Projectile speed
-    projectileSpeed: 20, // m/s
+    projectileSpeed: 40, // m/s
 
     // Size limits
     minSize: 0.3, // Minimum size (smaller falls through terrain)

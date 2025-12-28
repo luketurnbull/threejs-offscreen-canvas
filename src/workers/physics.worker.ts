@@ -23,6 +23,7 @@ import type {
 import type {
   DebugPhysicsUpdate,
   DebugPlayerUpdate,
+  DebugWorldUpdate,
 } from "~/shared/debug-config";
 import { assertInitialized, assertValidEntityId } from "~/shared/validation";
 import { PhysicsWorld } from "../physics";
@@ -185,6 +186,10 @@ function createPhysicsApi(): PhysicsApi {
 
     updatePlayerConfig(config: DebugPlayerUpdate): void {
       assertPhysicsInitialized().updatePlayerConfig(config);
+    },
+
+    updateWorldConfig(config: DebugWorldUpdate): void {
+      assertPhysicsInitialized().updateWorldConfig(config);
     },
   };
 }

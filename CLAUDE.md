@@ -136,9 +136,15 @@ config.floatingCapsule.springStrength    // 1.2
 config.floatingCapsule.jumpForce         // 12
 config.floatingCapsule.sprintMultiplier  // 1.8
 
-// Terrain
-config.terrain.amplitude             // 5
-config.terrain.octaves               // 5
+// Terrain (10x scale world)
+config.terrain.size                  // 1000 (world units)
+config.terrain.segments              // 256
+config.terrain.amplitude             // 15
+config.terrain.noiseScale            // 0.0015
+
+// Fog
+config.fog.near                      // 50
+config.fog.far                       // 150
 
 // Audio
 config.audio.footsteps.volume        // 0.4

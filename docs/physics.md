@@ -98,15 +98,31 @@ const y = getHeightAt(x, z, heights, config.terrain);
 
 ```typescript
 terrain: {
-  size: 100,          // World units
-  segments: 128,      // Grid resolution
-  noiseScale: 0.015,  // Frequency (lower = larger hills)
-  amplitude: 5,       // Max height variation
+  size: 1000,         // World units (10x scale)
+  segments: 256,      // Grid resolution (256x256 vertices)
+  noiseScale: 0.0015, // Frequency (scaled for larger terrain)
+  amplitude: 15,      // Max height variation
   octaves: 5,         // Detail layers
   persistence: 0.45,  // Amplitude falloff per octave
   seed: 42,           // Deterministic seed
 }
 ```
+
+## Distance-Based Sleeping
+
+Entities beyond 2× fog distance are put to sleep to save CPU.
+
+```
+Player ───────┬─────────┬──────────────────────>
+              │         │
+         Wake Zone  Sleep Zone
+         (fog×2-20)  (fog×2+)
+```
+
+- Uses Rapier's native `body.sleep()` / `body.wakeUp()`
+- Configurable via debug panel: World → Sleep Distance
+- Default: `fog.far × 2` = 300 units
+- Wake margin of 20 units prevents popping
 
 ## Colliders
 
