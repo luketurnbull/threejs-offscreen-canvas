@@ -3,7 +3,7 @@
  *
  * Displays keyboard controls with real-time press highlighting.
  * Fixed position at bottom-right of screen.
- * Uses Shadow DOM for style isolation.
+ * Uses Shadow DOM for style isolation. Inherits design tokens from :root.
  */
 
 export class KeyboardControlsUI extends HTMLElement {
@@ -27,49 +27,49 @@ export class KeyboardControlsUI extends HTMLElement {
       <style>
         :host {
           position: fixed;
-          bottom: 20px;
-          right: 20px;
+          bottom: var(--space-5, 20px);
+          right: var(--space-5, 20px);
           z-index: 1000;
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-family: var(--font-family, system-ui, sans-serif);
           user-select: none;
         }
 
         .container {
-          background: rgba(0, 0, 0, 0.75);
+          background: var(--color-surface-overlay, rgba(0, 0, 0, 0.75));
           backdrop-filter: blur(8px);
-          border-radius: 12px;
-          padding: 12px;
+          border-radius: var(--radius-lg, 12px);
+          padding: var(--space-3, 12px);
           display: flex;
           align-items: flex-end;
-          gap: 8px;
+          gap: var(--space-2, 8px);
         }
 
         .wasd-group {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 4px;
+          gap: var(--space-1, 4px);
         }
 
         .wasd-row {
           display: flex;
-          gap: 4px;
+          gap: var(--space-1, 4px);
         }
 
         .key {
           width: 36px;
           height: 36px;
-          border: 2px solid #444;
-          border-radius: 6px;
+          border: 2px solid var(--color-border, #444);
+          border-radius: var(--radius-md, 8px);
           background: transparent;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 11px;
+          font-size: var(--font-size-xs, 11px);
           font-weight: 600;
-          color: #666;
+          color: var(--color-text-muted, #666);
           text-transform: uppercase;
-          transition: all 0.1s ease;
+          transition: all var(--transition-fast, 0.1s ease);
         }
 
         .key.space {
@@ -77,9 +77,9 @@ export class KeyboardControlsUI extends HTMLElement {
         }
 
         .key.active {
-          border-color: #4a9eff;
-          background: rgba(74, 158, 255, 0.15);
-          color: #fff;
+          border-color: var(--btn-border-active, #4a9eff);
+          background: var(--btn-bg-active, rgba(74, 158, 255, 0.15));
+          color: var(--color-text-primary, #fff);
         }
       </style>
 

@@ -11,7 +11,7 @@
 import type { Remote } from "comlink";
 import type { RenderApi, SerializedClickEvent } from "~/shared/types";
 import { config } from "~/shared/config";
-import type { SpawnConfig } from "../components/entity-spawner-ui";
+import type { SpawnConfig } from "../components/spawner-ui";
 import type EntityCoordinator from "../coordinators/entity-coordinator";
 
 /**

@@ -7,7 +7,6 @@ import * as THREE from "three";
  * Runs on main thread (overhead exceeds cost of worker transfer).
  */
 export class ShapePreview {
-  private static readonly CANVAS_SIZE = 80;
   private static readonly ROTATION_SPEED = 0.5; // rad/s
   private static readonly CAMERA_DISTANCE = 2.5;
 
@@ -28,13 +27,17 @@ export class ShapePreview {
   private sphereMaterial: THREE.MeshStandardMaterial;
 
   constructor(canvas: HTMLCanvasElement) {
+    // Get actual canvas size from CSS
+    const rect = canvas.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) || 80;
+
     // Renderer - small, no antialiasing needed at this size
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
       antialias: false,
     });
-    this.renderer.setSize(ShapePreview.CANVAS_SIZE, ShapePreview.CANVAS_SIZE);
+    this.renderer.setSize(size, size);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     // Scene

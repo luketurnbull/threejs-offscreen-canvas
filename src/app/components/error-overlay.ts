@@ -3,6 +3,7 @@
  *
  * A reusable error overlay component that provides consistent error
  * presentation across the application. Uses Shadow DOM for style isolation.
+ * Inherits design tokens from :root.
  *
  * @example
  * ```typescript
@@ -56,12 +57,12 @@ export class ErrorOverlay extends HTMLElement {
           left: 0;
           width: 100%;
           height: 100%;
-          background: rgba(0, 0, 0, 0.9);
+          background: var(--color-surface-modal, rgba(0, 0, 0, 0.9));
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 10000;
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-family: var(--font-family, system-ui, sans-serif);
         }
 
         :host([hidden]) {
@@ -69,24 +70,24 @@ export class ErrorOverlay extends HTMLElement {
         }
 
         .error-content {
-          background: #1a1a1a;
+          background: var(--color-surface, #1a1a1a);
           padding: 2rem 3rem;
-          border-radius: 8px;
-          border: 1px solid #333;
+          border-radius: var(--radius-md, 8px);
+          border: 1px solid var(--color-border, #333);
           text-align: center;
           max-width: 500px;
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+          box-shadow: var(--shadow-lg, 0 4px 24px rgba(0, 0, 0, 0.5));
         }
 
         .error-title {
-          color: #ff4444;
+          color: var(--color-error, #ff4444);
           margin: 0 0 1rem;
           font-size: 1.5rem;
           font-weight: 600;
         }
 
         .error-message {
-          color: #ccc;
+          color: var(--color-text-secondary, #ccc);
           margin: 0;
           line-height: 1.6;
           font-size: 1rem;
@@ -95,10 +96,10 @@ export class ErrorOverlay extends HTMLElement {
         .error-details {
           margin-top: 1rem;
           padding-top: 1rem;
-          border-top: 1px solid #333;
-          color: #888;
-          font-size: 0.875rem;
-          font-family: "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          border-top: 1px solid var(--color-border, #333);
+          color: var(--color-text-muted, #888);
+          font-size: var(--font-size-base, 14px);
+          font-family: var(--font-mono, "SF Mono", Monaco, Consolas, monospace);
           text-align: left;
           white-space: pre-wrap;
           word-break: break-word;
@@ -112,23 +113,24 @@ export class ErrorOverlay extends HTMLElement {
         }
 
         .error-button {
-          background: #333;
-          color: #fff;
-          border: 1px solid #555;
+          background: var(--color-gray-800, #333);
+          color: var(--color-text-primary, #fff);
+          border: 1px solid var(--color-gray-600, #555);
           padding: 0.5rem 1.5rem;
-          border-radius: 4px;
-          font-size: 0.875rem;
+          border-radius: var(--radius-sm, 4px);
+          font-size: var(--font-size-base, 14px);
+          font-family: inherit;
           cursor: pointer;
-          transition: background 0.2s, border-color 0.2s;
+          transition: all var(--transition-normal, 0.15s ease);
         }
 
         .error-button:hover {
-          background: #444;
-          border-color: #666;
+          background: var(--color-border, #444);
+          border-color: var(--color-text-muted, #666);
         }
 
         .error-button:focus {
-          outline: 2px solid #ff4444;
+          outline: 2px solid var(--color-error, #ff4444);
           outline-offset: 2px;
         }
       </style>

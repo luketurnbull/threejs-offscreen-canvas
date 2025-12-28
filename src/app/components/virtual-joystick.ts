@@ -4,6 +4,7 @@
  * Circular joystick with draggable knob for touch-based movement.
  * Emits joystick-move events with angle, distance, and active state.
  * Distance > 0.7 maps to sprint for faster movement.
+ * Inherits design tokens from :root.
  */
 
 export interface JoystickState {
@@ -35,8 +36,8 @@ export class VirtualJoystick extends HTMLElement {
       <style>
         :host {
           position: fixed;
-          bottom: 20px;
-          right: 20px;
+          bottom: var(--space-5, 20px);
+          right: var(--space-5, 20px);
           z-index: 1000;
           touch-action: none;
           user-select: none;
@@ -46,9 +47,9 @@ export class VirtualJoystick extends HTMLElement {
         .base {
           width: 120px;
           height: 120px;
-          border-radius: 50%;
-          background: rgba(0, 0, 0, 0.5);
-          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-radius: var(--radius-full, 9999px);
+          background: var(--control-bg, rgba(0, 0, 0, 0.5));
+          border: 2px solid var(--control-border, rgba(255, 255, 255, 0.3));
           position: relative;
           backdrop-filter: blur(4px);
         }
@@ -56,22 +57,22 @@ export class VirtualJoystick extends HTMLElement {
         .knob {
           width: 50px;
           height: 50px;
-          border-radius: 50%;
+          border-radius: var(--radius-full, 9999px);
           background: rgba(74, 158, 255, 0.8);
           position: absolute;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          transition: background 0.1s;
+          transition: background var(--transition-fast, 0.1s ease);
           pointer-events: none;
         }
 
         .knob.active {
-          background: rgba(74, 158, 255, 1);
+          background: var(--color-accent, #4a9eff);
         }
 
         .knob.sprint {
-          background: rgba(255, 158, 74, 1);
+          background: var(--color-sprint, #ff9e4a);
         }
       </style>
 

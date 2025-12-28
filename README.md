@@ -16,6 +16,7 @@ High-performance Three.js + Rapier physics in dedicated Web Workers. Smooth 120H
 - **TypeScript** - Full type safety with branded EntityIds
 - **Debug Tools** - Tweakpane, Stats.js, physics collider visualization
 - **Responsive Controls** - Desktop keyboard + mobile touch (joystick, jump button)
+- **CSS Design Tokens** - Centralized design system with CSS custom properties
 
 ## Quick Start
 
@@ -69,6 +70,7 @@ Add `#debug` for debug controls and performance stats.
 | [SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) | Zero-copy memory sharing |
 | [Comlink](https://github.com/GoogleChromeLabs/comlink) | Type-safe worker RPC |
 | [OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) | Worker canvas rendering |
+| [Popover API](https://developer.mozilla.org/en-US/docs/Web/API/Popover_API) | Native tooltip/menu UI |
 
 ## Project Structure
 
@@ -103,13 +105,13 @@ src/
     ui/
       ui-manager.ts          # UI lifecycle
     components/
-      loading-screen.ts
-      error-overlay.ts
-      entity-spawner-ui.ts   # Desktop spawner
+      loading-screen.ts      # Loading progress + start button
+      error-overlay.ts       # Error display
+      spawner-ui.ts          # Unified spawner (canvas + popover)
       keyboard-controls-ui.ts # Desktop controls overlay
       virtual-joystick.ts    # Mobile joystick
       jump-button.ts         # Mobile jump
-      mobile-spawner-menu.ts # Mobile spawner
+      shape-preview.ts       # Three.js spawner preview
     
   renderer/                  # Three.js (worker)
     core/
@@ -160,6 +162,25 @@ config.audio.footsteps.volume     // 0.4
 config.spawner.projectileSpeed    // 20
 ```
 
+## Design System
+
+CSS design tokens in `style.css` with 3-layer architecture:
+
+```css
+/* Primitives */
+--color-blue-500: #4a9eff;
+--space-4: 16px;
+
+/* Semantics */
+--color-accent: var(--color-blue-500);
+--color-surface: var(--color-gray-900);
+
+/* Component tokens */
+--btn-bg-active: rgba(74, 158, 255, 0.15);
+```
+
+Tokens cascade into Shadow DOM components for consistent styling.
+
 ## Entity System
 
 See [docs/entities.md](docs/entities.md).
@@ -188,6 +209,7 @@ Add `#debug` to URL:
 **Required:**
 - OffscreenCanvas (Chrome 69+, Firefox 105+, Safari 16.4+)
 - SharedArrayBuffer (requires COOP/COEP headers)
+- Popover API (Chrome 114+, Firefox 125+, Safari 17+)
 - ES Modules in Workers
 - WebGL2
 

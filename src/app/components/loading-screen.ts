@@ -3,7 +3,7 @@
  *
  * Shows loading progress during resource initialization, then displays a
  * "Click to Start" button to unlock audio (browser autoplay policy).
- * Uses Shadow DOM for style isolation.
+ * Uses Shadow DOM for style isolation. Inherits design tokens from :root.
  */
 export class LoadingScreen extends HTMLElement {
   private shadow: ShadowRoot;
@@ -24,13 +24,13 @@ export class LoadingScreen extends HTMLElement {
           left: 0;
           width: 100%;
           height: 100%;
-          background: #1a1a1a;
+          background: var(--color-surface, #1a1a1a);
           display: flex;
           align-items: center;
           justify-content: center;
           z-index: 9999;
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          transition: opacity 0.3s ease-out;
+          font-family: var(--font-family, system-ui, sans-serif);
+          transition: opacity var(--transition-slow, 0.3s ease);
         }
 
         :host([hidden]) {
@@ -45,8 +45,8 @@ export class LoadingScreen extends HTMLElement {
         }
 
         .title {
-          color: #fff;
-          font-size: 2rem;
+          color: var(--color-text-primary, #fff);
+          font-size: var(--font-size-2xl, 32px);
           font-weight: 300;
           margin: 0 0 2rem;
           letter-spacing: 0.1em;
@@ -55,7 +55,7 @@ export class LoadingScreen extends HTMLElement {
         .progress-container {
           width: 100%;
           height: 4px;
-          background: #333;
+          background: var(--color-gray-800, #333);
           border-radius: 2px;
           overflow: hidden;
           margin-bottom: 1rem;
@@ -63,42 +63,48 @@ export class LoadingScreen extends HTMLElement {
 
         .progress-bar {
           height: 100%;
-          background: linear-gradient(90deg, #4a9eff, #00d4ff);
+          background: var(--color-accent-gradient, linear-gradient(90deg, #4a9eff, #00d4ff));
           width: 0%;
-          transition: width 0.3s ease-out;
+          transition: width var(--transition-slow, 0.3s ease);
           border-radius: 2px;
         }
 
         .progress-text {
-          color: #888;
-          font-size: 0.875rem;
+          color: var(--color-text-secondary, #888);
+          font-size: var(--font-size-base, 14px);
           margin: 0;
           min-height: 1.25rem;
         }
 
         .start-button {
           display: none;
-          background: transparent;
-          color: #fff;
-          border: 2px solid #fff;
+          background: var(--color-accent, #4a9eff);
+          color: var(--color-text-primary, #fff);
+          border: 2px solid var(--color-accent, #4a9eff);
           padding: 1rem 3rem;
-          font-size: 1.25rem;
+          font-size: var(--font-size-lg, 16px);
           font-weight: 500;
-          letter-spacing: 0.15em;
+          letter-spacing: 0.1em;
+          border-radius: var(--radius-md, 8px);
           cursor: pointer;
-          transition: all 0.2s ease;
-          margin-top: 1rem;
+          transition: all var(--transition-normal, 0.15s ease);
+          margin-top: 1.5rem;
           text-transform: uppercase;
+          font-family: inherit;
         }
 
         .start-button:hover {
-          background: #fff;
-          color: #1a1a1a;
+          background: var(--color-accent-hover, #3a8eef);
+          border-color: var(--color-accent-hover, #3a8eef);
         }
 
         .start-button:focus {
-          outline: 2px solid #4a9eff;
+          outline: 2px solid var(--color-accent, #4a9eff);
           outline-offset: 4px;
+        }
+
+        .start-button:active {
+          transform: scale(0.98);
         }
 
         .start-button.visible {
@@ -120,8 +126,8 @@ export class LoadingScreen extends HTMLElement {
         .loading-dot {
           width: 8px;
           height: 8px;
-          background: #4a9eff;
-          border-radius: 50%;
+          background: var(--color-accent, #4a9eff);
+          border-radius: var(--radius-full, 9999px);
           animation: pulse 1.4s ease-in-out infinite;
         }
 

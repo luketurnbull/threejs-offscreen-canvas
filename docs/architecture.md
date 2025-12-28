@@ -108,10 +108,10 @@ src/
     bridges/                 # AudioBridge
     routing/                 # InputRouter
     providers/               # CanvasProvider
-    utils/                   # LoadProgressTracker
+    utils/                   # LoadProgressTracker, device-detector
     spawners/                # Box, Sphere, Player, World spawners
     ui/                      # UIManager
-    components/              # LoadingScreen, ErrorOverlay, EntitySpawnerUI, KeyboardControlsUI
+    components/              # UI web components
     
   renderer/
     core/                    # Experience, Renderer, Camera
@@ -200,19 +200,53 @@ Main thread AudioManager with spatial audio:
 - Jump/land from player state
 - Camera-based listener position
 
+## Design System
+
+CSS design tokens in `style.css` cascade into Shadow DOM components.
+
+```css
+/* Primitives */
+--color-blue-500: #4a9eff;
+--space-4: 16px;
+
+/* Semantics */
+--color-accent: var(--color-blue-500);
+--color-surface: var(--color-gray-900);
+
+/* Component tokens */
+--btn-bg-active: rgba(74, 158, 255, 0.15);
+```
+
 ## UI Components
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| LoadingScreen | `app/components/` | Loading progress + start |
-| ErrorOverlay | `app/components/` | Error display |
-| EntitySpawnerUI | `app/components/` | Desktop: shape/size config + 3D preview |
-| KeyboardControlsUI | `app/components/` | Desktop: WAD/Space overlay |
-| VirtualJoystick | `app/components/` | Mobile: touch joystick (bottom-right) |
-| JumpButton | `app/components/` | Mobile: jump button (bottom-left) |
-| MobileSpawnerMenu | `app/components/` | Mobile: collapsed spawner → modal |
+| Component | Purpose |
+|-----------|---------|
+| LoadingScreen | Loading progress + start button |
+| ErrorOverlay | Error display |
+| SpawnerUI | Unified: canvas preview + popover menu (Popover API) |
+| KeyboardControlsUI | Desktop: WAD/Space overlay |
+| VirtualJoystick | Mobile: touch joystick (bottom-right) |
+| JumpButton | Mobile: jump button (bottom-left) |
+| ShapePreview | Three.js preview for spawner (80×80, main thread) |
 
-EntitySpawnerUI has embedded WebGLRenderer for preview (80×80, main thread).
+All components use Shadow DOM and inherit design tokens from `:root`.
+
+### SpawnerUI
+
+Uses native Popover API for light-dismiss behavior:
+
+```html
+<button popovertarget="spawner-menu">
+  <canvas class="preview-canvas"></canvas>
+</button>
+<div id="spawner-menu" popover>
+  <!-- Shape toggle + size slider -->
+</div>
+```
+
+- Canvas preview IS the button
+- Single toggle cycles Box ⟷ Sphere
+- Works on both desktop and mobile
 
 ## Mobile Touch Controls
 
@@ -223,12 +257,11 @@ On touch devices, the UI switches to mobile-optimized controls:
   - Analog `turnAxis` (-1 to 1) with 1.5 power curve for precision
   - Gentle push = slow turn, full push = full turn speed
 - **JumpButton** - Simple touch button for jumping
-- **MobileSpawnerMenu** - Collapsed button that opens modal for shape/size selection
 
 Device detection via `src/app/utils/device-detector.ts`. Touch input bridged to physics via `TouchInputHandler`.
 
 ## Browser Support
 
-Required: OffscreenCanvas, SharedArrayBuffer, ES Modules in Workers, WebGL2.
+Required: OffscreenCanvas, SharedArrayBuffer, Popover API, ES Modules in Workers, WebGL2.
 
 No fallback - shows error if unsupported.

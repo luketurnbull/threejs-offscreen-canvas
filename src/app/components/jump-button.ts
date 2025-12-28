@@ -3,6 +3,7 @@
  *
  * Simple circular button that emits jump-start/jump-end events.
  * Visual feedback on press with scale and color change.
+ * Inherits design tokens from :root.
  */
 
 export class JumpButton extends HTMLElement {
@@ -23,8 +24,8 @@ export class JumpButton extends HTMLElement {
       <style>
         :host {
           position: fixed;
-          bottom: 20px;
-          left: 20px;
+          bottom: var(--space-5, 20px);
+          left: var(--space-5, 20px);
           z-index: 1000;
           touch-action: none;
           user-select: none;
@@ -34,27 +35,27 @@ export class JumpButton extends HTMLElement {
         .button {
           width: 70px;
           height: 70px;
-          border-radius: 50%;
-          background: rgba(0, 0, 0, 0.5);
-          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-radius: var(--radius-full, 9999px);
+          background: var(--control-bg, rgba(0, 0, 0, 0.5));
+          border: 2px solid var(--control-border, rgba(255, 255, 255, 0.3));
           display: flex;
           align-items: center;
           justify-content: center;
           color: rgba(255, 255, 255, 0.7);
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          font-size: 11px;
+          font-family: var(--font-family, system-ui, sans-serif);
+          font-size: var(--font-size-xs, 11px);
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          transition: all 0.1s ease;
+          transition: all var(--transition-fast, 0.1s ease);
           backdrop-filter: blur(4px);
         }
 
         .button.pressed {
           background: rgba(74, 158, 255, 0.6);
-          border-color: rgba(74, 158, 255, 0.8);
+          border-color: var(--color-accent, #4a9eff);
           transform: scale(0.95);
-          color: #fff;
+          color: var(--color-text-primary, #fff);
         }
       </style>
 

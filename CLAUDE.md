@@ -67,11 +67,11 @@ src/
     components/
       loading-screen.ts
       error-overlay.ts
-      entity-spawner-ui.ts   # Desktop: shape/size selector + 3D preview
+      spawner-ui.ts          # Unified: canvas-as-button + popover menu
       keyboard-controls-ui.ts # Desktop: WAD/Space overlay
       virtual-joystick.ts    # Mobile: touch joystick
       jump-button.ts         # Mobile: jump button
-      mobile-spawner-menu.ts # Mobile: collapsed spawner → modal
+      shape-preview.ts       # Three.js preview for spawner
     
   renderer/                  # Three.js (worker)
     core/
@@ -118,6 +118,32 @@ src/
 - `~/shaders` → `src/shaders/`
 
 Domain folders use relative imports.
+
+### Design Tokens
+
+CSS custom properties in `style.css` cascade into Shadow DOM components.
+
+**3-Layer Architecture:**
+```css
+/* Primitives - raw values */
+--color-blue-500: #4a9eff;
+--space-4: 16px;
+--radius-md: 8px;
+
+/* Semantics - purpose-based */
+--color-accent: var(--color-blue-500);
+--color-surface: var(--color-gray-900);
+
+/* Component tokens */
+--btn-bg-active: rgba(74, 158, 255, 0.15);
+--control-bg: rgba(0, 0, 0, 0.5);
+```
+
+**Key Tokens:**
+- Colors: `--color-accent`, `--color-surface`, `--color-text-primary/secondary/muted`
+- Spacing: `--space-1` (4px) through `--space-6` (24px)
+- Radius: `--radius-sm/md/lg/full`
+- Transitions: `--transition-fast/normal/slow`
 
 ### Configuration
 
@@ -181,13 +207,13 @@ Create in `renderer/entities/components/`, register in `renderer/entities/index.
 
 Lifecycle hooks: `onTransformUpdate`, `onPhysicsFrame`, `onRenderFrame`, `dispose`.
 
-### Adding Touch Controls
+### Adding UI Components
 
 1. Create Web Component in `src/app/components/`
 2. Shadow DOM for style isolation
-3. Emit custom events (e.g., `joystick-move`, `jump-start`)
-4. Register in `TouchInputHandler`
-5. Wire in `UIManager.createMobileControls()`
+3. Use design tokens from `:root` (e.g., `var(--color-accent)`)
+4. Emit custom events for interactions
+5. Register in `UIManager`
 
 ### Entity System
 
@@ -246,7 +272,6 @@ Responsive UI switches between desktop/mobile. No backward movement on either pl
 **Touch Components**:
 - `VirtualJoystick` - 120px base, distance controls sprint (>0.7 = sprint)
 - `JumpButton` - 70px circular, hold for jump buffer
-- `MobileSpawnerMenu` - collapsed button → modal overlay
 
 **Analog Turning** (mobile joystick):
 - Uses `turnAxis` field in `MovementInput` (-1 to 1)
@@ -260,6 +285,21 @@ Responsive UI switches between desktop/mobile. No backward movement on either pl
 Touch Events → TouchInputHandler → InputRouter.setMovementInput()
                                          ↓
                               PhysicsWorker + RenderWorker (synthetic keys)
+```
+
+### Spawner UI
+
+Unified component for desktop and mobile using Popover API:
+- Canvas preview IS the button (click to open menu)
+- Popover menu with shape toggle + size slider
+- Single toggle button cycles Box ⟷ Sphere
+- Uses native `popover` attribute for light-dismiss
+
+```html
+<button popovertarget="spawner-menu">
+  <canvas class="preview-canvas"></canvas>
+</button>
+<div id="spawner-menu" popover>...</div>
 ```
 
 ## GLSL Shaders
