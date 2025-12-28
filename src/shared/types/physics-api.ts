@@ -96,6 +96,8 @@ export interface MovementInput {
   right: boolean;
   jump: boolean;
   sprint: boolean;
+  /** Analog turn axis for mobile joystick: -1 (full left) to 1 (full right) */
+  turnAxis?: number;
 }
 
 /**

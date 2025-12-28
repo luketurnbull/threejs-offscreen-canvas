@@ -145,8 +145,30 @@ setPlayerInput() ───> FloatingCapsuleController.update()
                       ├── detectGround()
                       ├── applyFloatingForce()
                       ├── applyMovementForces()
-                      └── handleJump()
+                      ├── handleJump()
+                      └── applyRotation()
 ```
+
+### Movement Input
+
+```typescript
+interface MovementInput {
+  forward: boolean;
+  backward: boolean;  // Disabled (forward-only)
+  left: boolean;      // Desktop keyboard
+  right: boolean;     // Desktop keyboard
+  jump: boolean;
+  sprint: boolean;
+  turnAxis?: number;  // Mobile: -1 (left) to 1 (right)
+}
+```
+
+### Turning
+
+- **Desktop**: Boolean `left`/`right` → constant turn speed
+- **Mobile**: Analog `turnAxis` with 1.5 power curve for precision
+  - Gentle joystick push = slow turn
+  - Full push = full turn speed
 
 ## Files
 

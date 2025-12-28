@@ -248,10 +248,12 @@ Responsive UI switches between desktop/mobile. No backward movement on either pl
 - `JumpButton` - 70px circular, hold for jump buffer
 - `MobileSpawnerMenu` - collapsed button → modal overlay
 
-**Diagonal Movement** (mobile joystick):
-- Forward threshold: 0.2 (active until ~78° from up)
-- Turn threshold: 0.5 (starts at ~30° from up)
-- Creates overlap zone for smooth diagonal movement
+**Analog Turning** (mobile joystick):
+- Uses `turnAxis` field in `MovementInput` (-1 to 1)
+- Formula: `turnAxis = sign(rawTurn) × |rawTurn|^1.5`
+- Where `rawTurn = sin(angle) × distance`
+- Power curve gives precision at low values, full speed at max
+- Desktop keyboard unchanged (uses boolean left/right fallback)
 
 **Input Flow**:
 ```

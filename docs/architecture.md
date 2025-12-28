@@ -218,9 +218,10 @@ EntitySpawnerUI has embedded WebGLRenderer for preview (80×80, main thread).
 
 On touch devices, the UI switches to mobile-optimized controls:
 
-- **VirtualJoystick** - Circular touch joystick with diagonal movement support
+- **VirtualJoystick** - Circular touch joystick with analog turning
   - Distance > 70% triggers sprint (orange visual feedback)
-  - Smooth diagonal zones for forward+turn combinations
+  - Analog `turnAxis` (-1 to 1) with 1.5 power curve for precision
+  - Gentle push = slow turn, full push = full turn speed
 - **JumpButton** - Simple touch button for jumping
 - **MobileSpawnerMenu** - Collapsed button that opens modal for shape/size selection
 

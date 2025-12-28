@@ -408,14 +408,21 @@ export default class FloatingCapsuleController {
 
   /**
    * Apply rotation based on input
+   * Uses analog turnAxis for mobile joystick, falls back to boolean for keyboard
    */
   private applyRotation(deltaSeconds: number): void {
-    if (this.input.left) {
-      this.rotationY += this.turnSpeed * deltaSeconds;
+    let turn = 0;
+
+    // Use analog turnAxis if provided (mobile joystick)
+    if (this.input.turnAxis !== undefined && this.input.turnAxis !== 0) {
+      turn = -this.input.turnAxis; // Negative because positive = right = decrease rotationY
+    } else {
+      // Fall back to boolean for keyboard (desktop)
+      if (this.input.left) turn = 1;
+      if (this.input.right) turn = -1;
     }
-    if (this.input.right) {
-      this.rotationY -= this.turnSpeed * deltaSeconds;
-    }
+
+    this.rotationY += this.turnSpeed * turn * deltaSeconds;
 
     // Set rotation directly (Y-axis only)
     const halfAngle = this.rotationY / 2;

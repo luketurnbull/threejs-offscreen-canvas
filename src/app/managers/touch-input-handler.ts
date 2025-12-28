@@ -61,6 +61,7 @@ export default class TouchInputHandler {
       left: movement.left ?? false,
       right: movement.right ?? false,
       sprint: movement.sprint ?? false,
+      turnAxis: movement.turnAxis ?? 0,
     };
     this.inputRouter.setMovementInput(this.currentInput);
   }
@@ -71,15 +72,15 @@ export default class TouchInputHandler {
   }
 
   /**
-   * Convert joystick state to movement booleans
+   * Convert joystick state to movement with analog turn axis
    *
    * Angle convention: 0 = up (forward), PI/2 = right, PI = down, -PI/2 = left
    * Distance > 0.7 triggers sprint
    *
-   * Uses separate thresholds for smooth diagonal movement:
-   * - Forward zone: 0° to ±78° (forwardThreshold = 0.2)
-   * - Turn zone: ±30° to ±150° (turnThreshold = 0.5)
-   * - Diagonal overlap: ±30° to ±78° (both forward + turn active)
+   * Uses analog turnAxis for gradual turning:
+   * - Combines sin(angle) with distance for raw turn value
+   * - Applies 1.5 power curve for precision at low values
+   * - Result: gentle push = slow turn, full push = full turn speed
    */
   private joystickToMovement(state: JoystickState): Partial<MovementInput> {
     if (!state.active || state.distance < 0.1) {
@@ -89,6 +90,7 @@ export default class TouchInputHandler {
         left: false,
         right: false,
         sprint: false,
+        turnAxis: 0,
       };
     }
 
@@ -98,18 +100,22 @@ export default class TouchInputHandler {
     const forwardAmount = Math.cos(state.angle);
     const rightAmount = Math.sin(state.angle);
 
-    // Separate thresholds for smooth diagonal transitions
-    // forwardThreshold 0.2 = forward active until ~78° from up
-    // turnThreshold 0.5 = turn starts at ~30° from up
-    // This creates diagonal zones where both are active
+    // Calculate analog turn with sensitivity curve
+    // rightAmount * distance gives raw turn (-1 to 1 scaled by distance)
+    const rawTurn = rightAmount * state.distance;
+
+    // Apply power curve for precision at low values (1.5 power)
+    // Gentle push = very slow turn, full push = full speed
+    const turnAxis = Math.sign(rawTurn) * Math.pow(Math.abs(rawTurn), 1.5);
+
     const forwardThreshold = 0.2;
-    const turnThreshold = 0.5;
 
     return {
       forward: forwardAmount > forwardThreshold,
       backward: false, // Backward movement disabled
-      right: rightAmount > turnThreshold,
-      left: rightAmount < -turnThreshold,
+      left: false, // Use turnAxis instead
+      right: false, // Use turnAxis instead
+      turnAxis,
       sprint: state.distance > 0.7,
     };
   }

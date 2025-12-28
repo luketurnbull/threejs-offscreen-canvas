@@ -27,7 +27,7 @@ bun run dev
 Open `http://localhost:5173`
 
 **Desktop:** WAD to move, Space to jump, Shift to sprint  
-**Mobile:** Virtual joystick (bottom-right), Jump button (bottom-left)
+**Mobile:** Virtual joystick (bottom-right) with analog turning, Jump button (bottom-left)
 
 Add `#debug` for debug controls and performance stats.
 
