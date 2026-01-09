@@ -263,11 +263,12 @@ export class SharedTransformBuffer {
 
     const offset = entityIndex * FLOATS_PER_ENTITY;
 
-    // Shift current → previous
-    for (let i = 0; i < FLOATS_PER_TRANSFORM; i++) {
-      this.transformView[offset + FLOATS_PER_TRANSFORM + i] =
-        this.transformView[offset + i];
-    }
+    // Shift current → previous using native copyWithin (faster than loop)
+    this.transformView.copyWithin(
+      offset + FLOATS_PER_TRANSFORM, // target: previous section
+      offset, // start: current section
+      offset + FLOATS_PER_TRANSFORM, // end: end of current section
+    );
 
     // Write new current
     this.transformView[offset + CURRENT_POS_X] = posX;

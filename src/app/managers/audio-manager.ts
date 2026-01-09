@@ -39,6 +39,9 @@ export default class AudioManager {
   private isInitialized = false;
   private isResumed = false;
 
+  // Pre-allocated vector for lookAt calculations (avoid allocation in hot path)
+  private tempLookAt = new THREE.Vector3();
+
   constructor() {
     // Create virtual scene for audio positioning
     this.scene = new THREE.Scene();
@@ -258,8 +261,8 @@ export default class AudioManager {
       update.position.z,
     );
 
-    // Calculate look-at target from forward vector
-    const lookAt = new THREE.Vector3(
+    // Calculate look-at target from forward vector (reuse pre-allocated vector)
+    this.tempLookAt.set(
       update.position.x + update.forward.x,
       update.position.y + update.forward.y,
       update.position.z + update.forward.z,
@@ -267,7 +270,7 @@ export default class AudioManager {
 
     // Set camera up vector and look-at
     this.camera.up.set(update.up.x, update.up.y, update.up.z);
-    this.camera.lookAt(lookAt);
+    this.camera.lookAt(this.tempLookAt);
 
     // Update entire scene's world matrices to ensure listener and all sounds are synced
     this.scene.updateMatrixWorld(true);

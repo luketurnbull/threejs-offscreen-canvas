@@ -36,14 +36,7 @@ export const debugSpawnerConfig = {
 };
 
 /**
- * Mutable world config for debug tweaking
- */
-export const debugWorldConfig = {
-  sleepDistance: config.fog.far * 2, // Sleep physics beyond 2x fog distance
-};
-
-/**
- * Combined debug config for passing to physics worker
+ * Debug update types for passing to physics worker
  */
 export interface DebugPhysicsUpdate {
   density?: number;
@@ -57,8 +50,4 @@ export interface DebugPlayerUpdate {
   jumpForce?: number;
   floatingDistance?: number;
   maxVelocity?: number;
-}
-
-export interface DebugWorldUpdate {
-  sleepDistance?: number;
 }

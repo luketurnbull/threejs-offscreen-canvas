@@ -4,7 +4,6 @@ import {
   debugPhysicsConfig,
   debugPlayerConfig,
   debugSpawnerConfig,
-  debugWorldConfig,
 } from "~/shared/debug-config";
 
 export interface DebugUpdateCallback {
@@ -28,7 +27,6 @@ export interface PhysicsDebugCallbacks {
   onDensityChange?: (density: number) => void;
   onGravityChange?: (gravity: number) => void;
   onPlayerConfigChange?: (config: Partial<typeof debugPlayerConfig>) => void;
-  onSleepDistanceChange?: (distance: number) => void;
 }
 
 /**
@@ -58,7 +56,6 @@ export default class TweakpaneManager {
     this.createPhysicsControls();
     this.createPlayerControls();
     this.createSpawnerControls();
-    this.createWorldControls();
   }
 
   private createCubeStormControls(): void {
@@ -221,22 +218,6 @@ export default class TweakpaneManager {
       max: 50,
       step: 1,
     });
-  }
-
-  private createWorldControls(): void {
-    const folder = this.getOrCreateFolder("World");
-    folder.expanded = false;
-
-    folder
-      .addBinding(debugWorldConfig, "sleepDistance", {
-        label: "Sleep Distance",
-        min: 50,
-        max: 500,
-        step: 10,
-      })
-      .on("change", (ev) => {
-        this.physicsCallbacks?.onSleepDistanceChange?.(ev.value);
-      });
   }
 
   setUpdateCallback(callback: DebugUpdateCallback): void {

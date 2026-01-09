@@ -10,9 +10,15 @@ import type { EntityId } from "~/shared/types";
  * - Per-instance scale tracking
  */
 export default abstract class InstancedMeshBase {
+  // Pre-allocated matrix for hiding instances (avoids allocation in hot paths)
+  private static readonly zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+
   protected scene: THREE.Scene;
   protected mesh: THREE.InstancedMesh | null = null;
   protected dummy = new THREE.Object3D();
+
+  // Pre-allocated matrix for swap operations in remove()
+  private tempMatrix = new THREE.Matrix4();
 
   protected entityIds: EntityId[] = [];
   protected entityIndexMap: Map<EntityId, number> = new Map();
@@ -39,9 +45,8 @@ export default abstract class InstancedMeshBase {
     this.mesh = new THREE.InstancedMesh(geometry, material, this.maxCount);
 
     // Initialize all instances invisible
-    const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < this.maxCount; i++) {
-      this.mesh.setMatrixAt(i, zeroMatrix);
+      this.mesh.setMatrixAt(i, InstancedMeshBase.zeroMatrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
 
@@ -105,19 +110,17 @@ export default abstract class InstancedMeshBase {
     if (index !== lastIndex) {
       const lastEntityId = this.entityIds[lastIndex];
 
-      // Swap matrix
-      const matrix = new THREE.Matrix4();
-      this.mesh.getMatrixAt(lastIndex, matrix);
-      this.mesh.setMatrixAt(index, matrix);
+      // Swap matrix using pre-allocated tempMatrix
+      this.mesh.getMatrixAt(lastIndex, this.tempMatrix);
+      this.mesh.setMatrixAt(index, this.tempMatrix);
 
       // Update tracking
       this.entityIds[index] = lastEntityId;
       this.entityIndexMap.set(lastEntityId, index);
     }
 
-    // Hide last slot
-    const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
-    this.mesh.setMatrixAt(lastIndex, zeroMatrix);
+    // Hide last slot using static zeroMatrix
+    this.mesh.setMatrixAt(lastIndex, InstancedMeshBase.zeroMatrix);
 
     this.entityIndexMap.delete(entityId);
     this.entityScales.delete(entityId);
@@ -167,8 +170,21 @@ export default abstract class InstancedMeshBase {
     return this.entityIndexMap.get(entityId);
   }
 
+  /**
+   * @deprecated Use forEachEntity() to avoid array allocation
+   */
   getEntityIds(): EntityId[] {
     return this.entityIds.slice(0, this.activeCount);
+  }
+
+  /**
+   * Iterate over active entities without allocating a new array.
+   * Use this in hot paths instead of getEntityIds().
+   */
+  forEachEntity(callback: (entityId: EntityId, index: number) => void): void {
+    for (let i = 0; i < this.activeCount; i++) {
+      callback(this.entityIds[i], i);
+    }
   }
 
   getCount(): number {
@@ -178,9 +194,8 @@ export default abstract class InstancedMeshBase {
   clear(): void {
     if (!this.mesh) return;
 
-    const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < this.activeCount; i++) {
-      this.mesh.setMatrixAt(i, zeroMatrix);
+      this.mesh.setMatrixAt(i, InstancedMeshBase.zeroMatrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
 

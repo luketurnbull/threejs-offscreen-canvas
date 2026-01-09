@@ -20,11 +20,7 @@ import type {
   PlayerStateCallback,
   BatchBodyConfig,
 } from "~/shared/types";
-import type {
-  DebugPhysicsUpdate,
-  DebugPlayerUpdate,
-  DebugWorldUpdate,
-} from "~/shared/debug-config";
+import type { DebugPhysicsUpdate, DebugPlayerUpdate } from "~/shared/debug-config";
 import { assertInitialized, assertValidEntityId } from "~/shared/validation";
 import { PhysicsWorld } from "../physics";
 
@@ -186,10 +182,6 @@ function createPhysicsApi(): PhysicsApi {
 
     updatePlayerConfig(config: DebugPlayerUpdate): void {
       assertPhysicsInitialized().updatePlayerConfig(config);
-    },
-
-    updateWorldConfig(config: DebugWorldUpdate): void {
-      assertPhysicsInitialized().updateWorldConfig(config);
     },
   };
 }
