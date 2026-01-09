@@ -71,6 +71,10 @@ class Experience {
   // Audio callbacks
   private listenerCallback: ListenerCallback | null = null;
 
+  // Pre-allocated vectors for listener updates (avoid allocation in hot path)
+  private listenerForward = new THREE.Vector3();
+  private listenerUp = new THREE.Vector3();
+
   constructor(
     canvas: OffscreenCanvas,
     viewport: ViewportSize,
@@ -146,10 +150,8 @@ class Experience {
 
   private update(delta: number, elapsed: number): void {
     // Sync transforms from physics with interpolation
-    // Pass camera position for distance-based culling
     const newPhysicsFrame = this.transformSync.update(
       this.world.getEntities(),
-      this.camera.instance.position,
     );
 
     // Update world (entities, animations, lifecycle hooks)
@@ -176,12 +178,11 @@ class Experience {
 
     const camera = this.camera.instance;
 
-    // Get camera world direction
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
+    // Get camera world direction (reuse pre-allocated vector)
+    camera.getWorldDirection(this.listenerForward);
 
-    // Get camera up vector
-    const up = camera.up.clone();
+    // Get camera up vector (copy to pre-allocated vector instead of clone)
+    this.listenerUp.copy(camera.up);
 
     this.listenerCallback({
       position: {
@@ -189,8 +190,12 @@ class Experience {
         y: camera.position.y,
         z: camera.position.z,
       },
-      forward: { x: forward.x, y: forward.y, z: forward.z },
-      up: { x: up.x, y: up.y, z: up.z },
+      forward: {
+        x: this.listenerForward.x,
+        y: this.listenerForward.y,
+        z: this.listenerForward.z,
+      },
+      up: { x: this.listenerUp.x, y: this.listenerUp.y, z: this.listenerUp.z },
     });
   }
 

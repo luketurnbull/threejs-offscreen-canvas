@@ -133,8 +133,6 @@ export default class App {
       onDensityChange: (density) => physicsApi.updatePhysicsConfig({ density }),
       onGravityChange: (gravity) => physicsApi.updatePhysicsConfig({ gravity }),
       onPlayerConfigChange: (config) => physicsApi.updatePlayerConfig(config),
-      onSleepDistanceChange: (sleepDistance) =>
-        physicsApi.updateWorldConfig({ sleepDistance }),
     });
 
     const bindings = await renderApi.getDebugBindings();

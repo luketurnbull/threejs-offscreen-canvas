@@ -108,22 +108,6 @@ terrain: {
 }
 ```
 
-## Distance-Based Sleeping
-
-Entities beyond 2× fog distance are put to sleep to save CPU.
-
-```
-Player ───────┬─────────┬──────────────────────>
-              │         │
-         Wake Zone  Sleep Zone
-         (fog×2-20)  (fog×2+)
-```
-
-- Uses Rapier's native `body.sleep()` / `body.wakeUp()`
-- Configurable via debug panel: World → Sleep Distance
-- Default: `fog.far × 2` = 300 units
-- Wake margin of 20 units prevents popping
-
 ## Colliders
 
 | Type | Performance | Use |

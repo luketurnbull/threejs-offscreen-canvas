@@ -12,9 +12,7 @@ import type {
 import type {
   DebugPhysicsUpdate,
   DebugPlayerUpdate,
-  DebugWorldUpdate,
 } from "~/shared/debug-config";
-import { debugWorldConfig } from "~/shared/debug-config";
 import { type SharedTransformBuffer, EntityFlags } from "~/shared/buffers";
 import { config } from "~/shared/config";
 import FloatingCapsuleController from "./floating-capsule-controller";
@@ -50,10 +48,6 @@ export default class PhysicsWorld {
   private running = false;
   private lastTime = 0;
   private readonly PHYSICS_INTERVAL = config.physics.interval;
-
-  // Distance-based sleeping
-  private sleepDistance = debugWorldConfig.sleepDistance;
-  private readonly WAKE_MARGIN = 20; // Wake bodies earlier than sleep to prevent popping
 
   // Player state callback (stored for late-binding to controller)
   private playerStateCallback: PlayerStateCallback | null = null;
@@ -204,12 +198,6 @@ export default class PhysicsWorld {
     this.floatingController?.updateConfig(update);
   }
 
-  updateWorldConfig(update: DebugWorldUpdate): void {
-    if (update.sleepDistance !== undefined) {
-      this.sleepDistance = update.sleepDistance;
-    }
-  }
-
   setCollisionCallback(callback: CollisionCallback): void {
     this.collisionTracker.setCollisionCallback(callback);
   }
@@ -261,9 +249,6 @@ export default class PhysicsWorld {
       }
     }
 
-    // Sleep/wake distant bodies for performance
-    this.sleepDistantBodies();
-
     // Step physics
     this.world.step(this.eventQueue);
 
@@ -285,37 +270,6 @@ export default class PhysicsWorld {
     // Schedule next step
     setTimeout(this.step, this.PHYSICS_INTERVAL);
   };
-
-  /**
-   * Sleep bodies far from player, wake bodies that come into range
-   * Uses squared distance for performance (avoids sqrt)
-   */
-  private sleepDistantBodies(): void {
-    if (!this.floatingController || this.sleepDistance <= 0) return;
-
-    const playerPos = this.floatingController.getBody().translation();
-    const sleepThresholdSq = this.sleepDistance * this.sleepDistance;
-    const wakeThreshold = this.sleepDistance - this.WAKE_MARGIN;
-    const wakeThresholdSq = wakeThreshold * wakeThreshold;
-
-    this.entities.forEach((entity, id) => {
-      // Never sleep the player
-      if (id === this.playerId) return;
-
-      const pos = entity.body.translation();
-      const dx = pos.x - playerPos.x;
-      const dz = pos.z - playerPos.z;
-      const distSq = dx * dx + dz * dz;
-
-      const isSleeping = entity.body.isSleeping();
-
-      if (distSq > sleepThresholdSq && !isSleeping) {
-        entity.body.sleep();
-      } else if (distSq < wakeThresholdSq && isSleeping) {
-        entity.body.wakeUp();
-      }
-    });
-  }
 
   private writeTransformsToSharedBuffer(): void {
     if (!this.sharedBuffer) return;
