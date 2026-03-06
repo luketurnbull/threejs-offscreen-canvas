@@ -8,13 +8,12 @@
       "~/shared": ["src/shared/index.ts"],
       "~/shared/buffers": ["src/shared/buffers/index.ts"],
       "~/shared/*": ["src/shared/*"],
-      "~/shaders/*": ["src/shaders/*"],
     },
     "target": "ES2022",
     "useDefineForClassFields": true,
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "vite-plugin-glsl/ext"],
+    "types": ["vite/client"],
     "skipLibCheck": true,
 
     /* Bundler mode */
